@@ -1,121 +1,72 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, createContext, useContext } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import Layout from './components/Layout'
+import NuevaVenta from './pages/NuevaVenta'
+import Clientes from './pages/Clientes'
+import Inventario from './pages/Inventario'
+import Reportes from './pages/Reportes'
+import Proveedores from './pages/Proveedores'
+import { CarnetOverlay } from './components/CarnetOverlay'
+import { Toast, type ToastState } from './components/Toast'
+import { type Employee, type Branch, branches, isManager } from './data/mock-data'
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+interface AppContextType {
+  employee: Employee | null
+  branch: Branch
+  setBranch: (branch: Branch) => void
+  showCarnetOverlay: () => void
+  showToast: (toast: ToastState) => void
 }
 
-export default App
+export const AppContext = createContext<AppContextType | null>(null)
+
+export function useApp() {
+  const context = useContext(AppContext)
+  if (!context) throw new Error('useApp must be used within AppProvider')
+  return context
+}
+
+export default function App() {
+  const [employee, setEmployee] = useState<Employee | null>(null)
+  const [branch, setBranch] = useState<Branch>(branches[0])
+  const [carnetOverlayOpen, setCarnetOverlayOpen] = useState(true)
+  const [toast, setToast] = useState<ToastState | null>(null)
+
+  const showCarnetOverlay = () => setCarnetOverlayOpen(true)
+  const showToast = (newToast: ToastState) => setToast(newToast)
+
+  const handleAuthenticate = (authenticatedEmployee: Employee) => {
+    setEmployee(authenticatedEmployee)
+    setCarnetOverlayOpen(false)
+  }
+
+  return (
+    <AppContext.Provider value={{ employee, branch, setBranch, showCarnetOverlay, showToast }}>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Navigate to="/nueva-venta" replace />} />
+          <Route path="nueva-venta" element={<NuevaVenta />} />
+          <Route path="clientes" element={<Clientes />} />
+          <Route path="inventario" element={<Inventario />} />
+          <Route path="reportes" element={<Reportes />} />
+          {employee && isManager(employee) && (
+            <Route path="proveedores" element={<Proveedores />} />
+          )}
+        </Route>
+      </Routes>
+      
+      <CarnetOverlay
+        isOpen={carnetOverlayOpen}
+        onAuthenticate={handleAuthenticate}
+      />
+      
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+    </AppContext.Provider>
+  )
+}

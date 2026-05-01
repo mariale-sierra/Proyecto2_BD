@@ -1,13 +1,34 @@
-FROM node:20
+# Build stage
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-RUN npm install
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
 
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source files
 COPY . .
 
-EXPOSE 5173
+# Build the app
+RUN pnpm build
 
-CMD ["npm", "run", "dev"]
+# Production stage - using nginx to serve static files
+FROM nginx:alpine AS production
+
+# Copy nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built files from builder stage
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Expose port 80
+EXPOSE 80
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
