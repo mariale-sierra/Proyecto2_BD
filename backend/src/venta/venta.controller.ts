@@ -1,34 +1,18 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpException } from '@nestjs/common';
 import { VentaService } from './venta.service';
 import { CreateVentaDto } from './dto/create-venta.dto';
-import { UpdateVentaDto } from './dto/update-venta.dto';
 
 @Controller('venta')
 export class VentaController {
   constructor(private readonly ventaService: VentaService) {}
 
   @Post()
-  create(@Body() createVentaDto: CreateVentaDto) {
-    return this.ventaService.create(createVentaDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.ventaService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.ventaService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateVentaDto: UpdateVentaDto) {
-    return this.ventaService.update(+id, updateVentaDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.ventaService.remove(+id);
+  @HttpCode(201)
+  async crearVenta(@Body() dto: CreateVentaDto) {
+    const resultado = await this.ventaService.crearVenta(dto);
+    if(!resultado.ok) {
+      throw new HttpException(resultado.mensaje || 'Error al crear venta', 400);
+    }
+    return { id_venta: resultado.id_venta };  
   }
 }

@@ -1,26 +1,46 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
 import { CreateVentaDto } from './dto/create-venta.dto';
-import { UpdateVentaDto } from './dto/update-venta.dto';
+import { VentaRepository } from './venta.repository';
+import { Pool } from 'pg';
 
 @Injectable()
 export class VentaService {
-  create(createVentaDto: CreateVentaDto) {
-    return 'This action adds a new venta';
-  }
+    constructor(
+        private ventasRepo: VentaRepository,
+        @Inject('DB_POOL') private db: Pool 
+    ) {}
 
-  findAll() {
-    return `This action returns all venta`;
-  }
+    async crearVenta(dto: CreateVentaDto): Promise<{ ok: boolean; id_venta?: number; mensaje?: string }> {
+        const client = await this.db.connect();
+        try {
+            await client.query('BEGIN');
 
-  findOne(id: number) {
-    return `This action returns a #${id} venta`;
-  }
+            const total = dto.items.reduce(
+                (sum, item) => sum + item.cantidad * item.precio_unitario, 0
+            );
 
-  update(id: number, updateVentaDto: UpdateVentaDto) {
-    return `This action updates a #${id} venta`;
-  }
+            const id_venta = await this.ventasRepo.insertarVenta(
+                dto.id_cliente, dto.id_empleado, dto.id_sucursal, total, client  // pasas el client
+            );
 
-  remove(id: number) {
-    return `This action removes a #${id} venta`;
-  }
+            for (const item of dto.items) {
+                await this.ventasRepo.insertarDetalle(
+                    id_venta, item.id_producto, item.cantidad, item.precio_unitario, client
+                );
+                await this.ventasRepo.descontarStock(
+                    item.id_producto, dto.id_sucursal, item.cantidad, client
+                );
+            }
+
+            await client.query('COMMIT');
+            return { ok: true, id_venta };
+
+        } catch (err) {
+            await client.query('ROLLBACK');
+            const mensaje = err instanceof Error ? err.message : String(err);
+            return { ok: false, mensaje: 'Error al registrar la venta: ' + mensaje };
+        } finally {
+            client.release();  
+        }
+    }
 }

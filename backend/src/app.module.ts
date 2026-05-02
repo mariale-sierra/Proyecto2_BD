@@ -6,12 +6,13 @@ import { ProveedorModule } from './proveedor/proveedor.module';
 import { VentaModule } from './venta/venta.module';
 import { ClienteModule } from './cliente/cliente.module';
 import { SucursalModule } from './sucursal/sucursal.module';
-import { SuministroModule } from './suministro/suministro.module';
 import { EmpleadoModule } from './empleado/empleado.module';
-import { ProductoModule } from './producto/producto.module';
+import { DatabaseModule } from './database.module';
+import { ConfigModule } from '@nestjs/config';
+
 
 @Module({
-  imports: [ProductoModule, SuministroModule, EmpleadoModule, SucursalModule, ClienteModule, VentaModule, ProveedorModule],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule, ProductoModule, EmpleadoModule, SucursalModule, ClienteModule, VentaModule, ProveedorModule],
   controllers: [AppController],
   providers: [AppService],
 })
