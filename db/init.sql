@@ -130,10 +130,11 @@ INSERT INTO cliente (nombre, telefono, correo, nit) VALUES
 ('Cliente 2', '44444444', 'c2@mail.com', '7654321');
 
 INSERT INTO stock_sucursal VALUES
-(1, 1, 50),
+(1, 1, 3),
 (2, 1, 40),
 (3, 2, 30),
 (4, 2, 20);
+
 
 INSERT INTO venta (fecha, total, id_cliente, id_empleado, id_sucursal) VALUES
 ('2026-04-01', 15.00, 1, 1, 1),

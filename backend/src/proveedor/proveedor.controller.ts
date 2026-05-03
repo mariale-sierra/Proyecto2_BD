@@ -1,34 +1,30 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, HttpException } from '@nestjs/common';
 import { ProveedorService } from './proveedor.service';
 import { CreateProveedorDto } from './dto/create-proveedor.dto';
 import { UpdateProveedorDto } from './dto/update-proveedor.dto';
+import { ProveedorRepository } from './proveedor.repository';
 
 @Controller('proveedor')
 export class ProveedorController {
-  constructor(private readonly proveedorService: ProveedorService) {}
+    constructor(private proveedorRepo: ProveedorRepository) {}
 
-  @Post()
-  create(@Body() createProveedorDto: CreateProveedorDto) {
-    return this.proveedorService.create(createProveedorDto);
-  }
+    @Get()                              
+    async findAll() {
+        return await this.proveedorRepo.findAll();
+    }
 
-  @Get()
-  findAll() {
-    return this.proveedorService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.proveedorService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateProveedorDto: UpdateProveedorDto) {
-    return this.proveedorService.update(+id, updateProveedorDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.proveedorService.remove(+id);
-  }
+    @Get('pedido')
+    async infoPedido(
+        @Query('id_producto') id_producto: string,
+        @Query('id_sucursal') id_sucursal: string
+    ) {
+        if (!id_producto || !id_sucursal) {
+            throw new HttpException('id_producto e id_sucursal son requeridos', 400);
+        }
+        const info = await this.proveedorRepo.findProveedorDeProducto(
+            Number(id_producto), Number(id_sucursal)
+        );
+        if (!info) throw new HttpException('No se encontró proveedor para este producto', 404);
+        return info;
+    }
 }

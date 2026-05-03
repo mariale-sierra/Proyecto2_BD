@@ -1,26 +1,47 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';  
 import { CreateClienteDto } from './dto/create-cliente.dto';
-import { UpdateClienteDto } from './dto/update-cliente.dto';
+import {ClienteRepository} from "./cliente.repository";
 
 @Injectable()
 export class ClienteService {
-  create(createClienteDto: CreateClienteDto) {
-    return 'This action adds a new cliente';
+  constructor(private clienteRepo: ClienteRepository) {}
+  async findAll() {
+    return this.clienteRepo.findAll();
   }
 
-  findAll() {
-    return `This action returns all cliente`;
+  async findByNit(nit: string) {
+    return this.clienteRepo.findByNit(nit);
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} cliente`;
+  async findFrecuentes() {
+    return this.clienteRepo.findFrecuentes();
   }
 
-  update(id: number, updateClienteDto: UpdateClienteDto) {
-    return `This action updates a #${id} cliente`;
+  async create(dto: CreateClienteDto) {
+    const existe = await this.clienteRepo.findByNit(dto.nit);
+    if (existe) {
+      return {ok: false, mensaje: `Este NIT ya está registrado`};
+    }
+    const cliente = await this.clienteRepo.create(dto.nombre, dto.telefono, dto.correo, dto.nit);
+    return {ok:true, cliente};
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} cliente`;
+  async update(id:number, dto:CreateClienteDto){
+    const existe = await this.clienteRepo.findByNit(dto.nit);
+    if (existe && existe.id_cliente !== id) {
+      return{ok: false, mensaje: `Este NIT ya está registrado`};
+    }
+    const cliente = await this.clienteRepo.update(id, dto.nombre, dto.telefono, dto.correo, dto.nit);
+    if (!cliente) return {ok: false, mensaje: `Cliente no encontrado`};
+    return {ok:true, cliente};
+  }
+
+  async delete(id:number) {
+    const existe = await this.clienteRepo.findByNit(id.toString());
+    if (!existe) {
+      return {ok: false, mensaje: `Cliente no encontrado`};
+    }
+    await this.clienteRepo.delete(id);
+    return {ok:true};
   }
 }

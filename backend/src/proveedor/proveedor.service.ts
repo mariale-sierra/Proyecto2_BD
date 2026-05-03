@@ -1,26 +1,16 @@
-import { Injectable } from '@nestjs/common';
-import { CreateProveedorDto } from './dto/create-proveedor.dto';
-import { UpdateProveedorDto } from './dto/update-proveedor.dto';
+import { Injectable, Inject } from '@nestjs/common';
+import { Pool } from 'pg';
+import { ProveedorRepository } from './proveedor.repository';
 
 @Injectable()
 export class ProveedorService {
-  create(createProveedorDto: CreateProveedorDto) {
-    return 'This action adds a new proveedor';
-  }
+    constructor(private proveedorRepo: ProveedorRepository) {}
 
-  findAll() {
-    return `This action returns all proveedor`;
-  }
+    async findAll() {
+        return await this.proveedorRepo.findAll();
+    }
 
-  findOne(id: number) {
-    return `This action returns a #${id} proveedor`;
-  }
-
-  update(id: number, updateProveedorDto: UpdateProveedorDto) {
-    return `This action updates a #${id} proveedor`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} proveedor`;
-  }
+    async infoPedido(id_producto: number, id_sucursal: number) {
+        return await this.proveedorRepo.findProveedorDeProducto(id_producto, id_sucursal);
+    }
 }

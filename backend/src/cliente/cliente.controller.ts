@@ -1,34 +1,65 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { ClienteService } from './cliente.service';
+import { Controller, Get, Post, Body, Put, Param, Delete, Query, HttpException } from '@nestjs/common';
+import { ClienteService } from './cliente.service'; 
 import { CreateClienteDto } from './dto/create-cliente.dto';
-import { UpdateClienteDto } from './dto/update-cliente.dto';
+import { find } from 'rxjs';
+import { Pool } from 'pg';
 
 @Controller('cliente')
 export class ClienteController {
-  constructor(private readonly clienteService: ClienteService) {}
-
-  @Post()
-  create(@Body() createClienteDto: CreateClienteDto) {
-    return this.clienteService.create(createClienteDto);
+  private db: Pool;
+  constructor(private clienteService: ClienteService) {
+    this.db = new Pool();
   }
 
   @Get()
-  findAll() {
-    return this.clienteService.findAll();
+  async findAll() {
+    return await this.clienteService.findAll();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.clienteService.findOne(+id);
+  @Get('frecuentes')
+  async findFrecuentes() {
+    return await this.clienteService.findFrecuentes();
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto) {
-    return this.clienteService.update(+id, updateClienteDto);
+  @Get('buscar')
+  async buscar(@Query('q') q: string) {
+      if (!q) throw new HttpException('Parámetro de búsqueda requerido', 400);
+      const res = await this.db.query(
+          `SELECT c.id_cliente, c.nombre, c.telefono, c.nit,
+                  COUNT(v.id_venta) AS total_compras
+          FROM cliente c
+          LEFT JOIN venta v ON c.id_cliente = v.id_cliente
+          WHERE LOWER(c.nombre) LIKE LOWER('%' || $1 || '%')
+              OR c.nit = $1
+          GROUP BY c.id_cliente
+          ORDER BY total_compras DESC`,
+          [q]
+      );
+      return res.rows;
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.clienteService.remove(+id);
+  @Post()
+  async create(@Body() dto: CreateClienteDto) {
+    const resultado = await this.clienteService.create(dto);
+    if (!resultado.ok) {
+      throw new HttpException(resultado.mensaje ?? 'Error no se puede crear cliente', 400);
+    }
+    return resultado.cliente;
   }
+
+  @Put(':id')                  
+    async update(@Param('id') id: string, @Body() dto: CreateClienteDto) {
+        const resultado = await this.clienteService.update(Number(id), dto);
+        if (!resultado.ok) throw new HttpException(resultado.mensaje ?? `Error no se puede editar cliente`, 400);
+        return resultado.cliente;
+    }
+
+    @Delete(':id')                
+    async delete(@Param('id') id: string) {
+        const resultado = await this.clienteService.delete(Number(id));
+        if (!resultado.ok) throw new HttpException(resultado.mensaje ?? `Error no se puede eliminar cliente`, 400);
+        return { mensaje: 'Cliente eliminado correctamente' };
+    }
+
+
 }
