@@ -1,26 +1,38 @@
 import { Injectable } from '@nestjs/common';
-import { CreateSucursalDto } from './dto/create-sucursal.dto';
-import { UpdateSucursalDto } from './dto/update-sucursal.dto';
+import { SucursalRepository } from './sucursal.repository';
 
 @Injectable()
 export class SucursalService {
-  create(createSucursalDto: CreateSucursalDto) {
-    return 'This action adds a new sucursal';
-  }
+    constructor(private sucursalRepo: SucursalRepository) {}
 
-  findAll() {
-    return `This action returns all sucursal`;
-  }
+    async findAll() {
+        return await this.sucursalRepo.findAll();
+    }
 
-  findOne(id: number) {
-    return `This action returns a #${id} sucursal`;
-  }
+    async create(dto: { nombre: string; telefono: string; direccion: string; hora_abre: string; hora_cierra: string }) {
+        const sucursal = await this.sucursalRepo.create(
+            dto.nombre, dto.telefono, dto.direccion, dto.hora_abre, dto.hora_cierra
+        );
+        return { ok: true, sucursal };
+    }
 
-  update(id: number, updateSucursalDto: UpdateSucursalDto) {
-    return `This action updates a #${id} sucursal`;
-  }
+    async update(id: number, dto: { nombre: string; telefono: string; direccion: string; hora_abre: string; hora_cierra: string }) {
+        const existe = await this.sucursalRepo.findById(id);
+        if (!existe) return { ok: false, mensaje: 'Sucursal no encontrada' };
+        const sucursal = await this.sucursalRepo.update(
+            id, dto.nombre, dto.telefono, dto.direccion, dto.hora_abre, dto.hora_cierra
+        );
+        return { ok: true, sucursal };
+    }
 
-  remove(id: number) {
-    return `This action removes a #${id} sucursal`;
-  }
+    async delete(id: number) {
+        const existe = await this.sucursalRepo.findById(id);
+        if (!existe) return { ok: false, mensaje: 'Sucursal no encontrada' };
+        try {
+            await this.sucursalRepo.delete(id);
+            return { ok: true };
+        } catch (err) {
+            return { ok: false, mensaje: 'No se puede eliminar, la sucursal tiene empleados o ventas registradas' };
+        }
+    }
 }

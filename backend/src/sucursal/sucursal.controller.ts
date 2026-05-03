@@ -1,34 +1,33 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, HttpException } from '@nestjs/common';
 import { SucursalService } from './sucursal.service';
-import { CreateSucursalDto } from './dto/create-sucursal.dto';
-import { UpdateSucursalDto } from './dto/update-sucursal.dto';
 
 @Controller('sucursal')
 export class SucursalController {
-  constructor(private readonly sucursalService: SucursalService) {}
+    constructor(private sucursalService: SucursalService) {}
 
-  @Post()
-  create(@Body() createSucursalDto: CreateSucursalDto) {
-    return this.sucursalService.create(createSucursalDto);
-  }
+    @Get()                           
+    async findAll() {
+        return await this.sucursalService.findAll();
+    }
 
-  @Get()
-  findAll() {
-    return this.sucursalService.findAll();
-  }
+    @Post()                             
+    async create(@Body() dto: { nombre: string; telefono: string; direccion: string; hora_abre: string; hora_cierra: string }) {
+        const resultado = await this.sucursalService.create(dto);
+        if (!resultado.ok) throw new HttpException('Error', 400);
+        return resultado.sucursal;
+    }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.sucursalService.findOne(+id);
-  }
+    @Put(':id')                         
+    async update(@Param('id') id: string, @Body() dto: { nombre: string; telefono: string; direccion: string; hora_abre: string; hora_cierra: string }) {
+        const resultado = await this.sucursalService.update(Number(id), dto);
+        if (!resultado.ok) throw new HttpException('Error', 400);
+        return resultado.sucursal;
+    }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateSucursalDto: UpdateSucursalDto) {
-    return this.sucursalService.update(+id, updateSucursalDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.sucursalService.remove(+id);
-  }
+    @Delete(':id')                      
+    async delete(@Param('id') id: string) {
+        const resultado = await this.sucursalService.delete(Number(id));
+        if (!resultado.ok) throw new HttpException('Error', 400);
+        return { mensaje: 'Sucursal eliminada correctamente' };
+    }
 }
