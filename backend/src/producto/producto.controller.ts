@@ -1,6 +1,8 @@
 
 import { Controller, Get, Post, Put, Body, Param, Query, HttpException, Delete } from '@nestjs/common';
 import { ProductoService } from './producto.service';
+import { UpdateProductoDto } from './dto/update-producto.dto';
+import { CreateProductoDto } from './dto/create-producto.dto';
 
 @Controller('producto')
 export class ProductoController {
@@ -41,20 +43,19 @@ export class ProductoController {
     }
 
     @Post()                            
-    async create(@Body() dto: { nombre: string; precio_venta: number; id_categoria: number }) {
+    async create(
+        @Body() dto: CreateProductoDto) {
         const resultado = await this.productoService.create(dto);
         if (!resultado.ok) throw new HttpException(resultado.mensaje ?? 'Error', 400);
         return resultado.producto;
     }
 
-    @Put(':id')                        
-    async update(
-        @Param('id') id: string,
-        @Body() dto: { nombre: string; precio_venta: number; id_categoria: number }
+    @Put(':id')
+    update(
+    @Param('id') id: number,
+    @Body() dto: UpdateProductoDto
     ) {
-        const resultado = await this.productoService.update(Number(id), dto);
-        if (!resultado.ok) throw new HttpException(resultado.mensaje ?? 'Error', 400);
-        return resultado.producto;
+    return this.productoService.update(id, dto);
     }
 
     @Delete(':id')                     

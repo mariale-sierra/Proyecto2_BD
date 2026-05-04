@@ -50,10 +50,27 @@ function formatCurrency(amount: number | string): string {
   return `Q ${Number(amount).toFixed(2)}`
 }
 
-function getStockInfo(stock: number) {
-  if (stock === 0) return { color: 'text-destructive', bgColor: 'bg-destructive', progress: 0 }
-  if (stock <= 10) return { color: 'text-warning-foreground', bgColor: 'bg-warning', progress: (stock / 50) * 100 }
-  return { color: 'text-success', bgColor: 'bg-success', progress: Math.min((stock / 50) * 100, 100) }
+function getStockInfo(stock: number, maxStock: number = 100) {
+    const progress = maxStock > 0 ? Math.min((stock / maxStock) * 100, 100) : 0
+    
+    if (stock === 0) return {
+        progress: 0,
+        color: 'text-destructive',
+        bgColor: 'bg-destructive/20',
+        label: 'Sin stock'
+    }
+    if (stock < 5) return {
+        progress,
+        color: 'text-warning',
+        bgColor: 'bg-warning/20',
+        label: 'Stock bajo'
+    }
+    return {
+        progress,
+        color: 'text-success',
+        bgColor: 'bg-success/20',
+        label: 'OK'
+    }
 }
 
 export default function Inventario() {
@@ -101,6 +118,8 @@ export default function Inventario() {
       setLoading(false)
     }
   }
+
+  
 
   useEffect(() => {
     void loadCategories()
@@ -175,12 +194,18 @@ export default function Inventario() {
 
   const handleSave = async () => {
     if (!validateForm()) return
+    if (!branch?.id_sucursal) {
+      showToast({ message: 'No hay sucursal seleccionada.', type: 'error' })
+      return
+    }
 
     try {
       const payload = {
-        nombre: formData.name.trim(),
+        nombre: formData.name,
         precio_venta: Number(formData.price),
         id_categoria: Number(formData.categoryId),
+        stock: Number(formData.stock),
+        id_sucursal: branch.id_sucursal,
       }
 
       if (editingProduct) {
@@ -307,7 +332,8 @@ export default function Inventario() {
                 </TableRow>
               ) : (
                 filteredProducts.map((product) => {
-                  const stockInfo = getStockInfo(product.stock)
+                  const maxStock = Math.max(...filteredProducts.map(p => p.stock), 1)
+                  const stockInfo = getStockInfo(product.stock, maxStock)
                   return (
                     <TableRow key={product.id_producto} className="hover:bg-muted/50">
                       <TableCell className="font-medium">{product.nombre}</TableCell>

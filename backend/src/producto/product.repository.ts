@@ -2,6 +2,8 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { Pool } from 'pg';
 import { Producto } from './entities/producto.entity';
+import { UpdateProductoDto } from './dto/update-producto.dto';
+import { CreateProductoDto } from './dto/create-producto.dto';
 
 @Injectable()
 export class ProductoRepository {
@@ -42,24 +44,36 @@ export class ProductoRepository {
     return res.rows;
 }
 
-    async create(nombre: string, precio_venta: number, id_categoria: number) {
+    async create(dto: CreateProductoDto) {
         const res = await this.db.query(
             `INSERT INTO Producto (nombre, precio_venta, id_categoria)
              VALUES ($1, $2, $3) RETURNING *`,
-            [nombre, precio_venta, id_categoria]
+            [dto.nombre, dto.precio_venta, dto.id_categoria]
         );
         const row = res.rows[0];
         return new Producto(row.id_producto, row.nombre, row.precio_venta, row.id_categoria);
     }
 
-    async update(id: number, nombre: string, precio_venta: number, id_categoria: number) {
-        const res = await this.db.query(
-            `UPDATE Producto SET nombre=$1, precio_venta=$2, id_categoria=$3
-             WHERE id_producto=$4 RETURNING *`,
-            [nombre, precio_venta, id_categoria, id]
-        );
-        const row = res.rows[0];
-        return row ? new Producto(row.id_producto, row.nombre, row.precio_venta, row.id_categoria) : null;
+    async updateProducto(id: number, dto: UpdateProductoDto) {
+    await this.db.query(
+        `UPDATE producto 
+        SET nombre = COALESCE($1, nombre),
+            precio_venta = COALESCE($2, precio_venta),
+            id_categoria = COALESCE($3, id_categoria)
+        WHERE id_producto = $4`,
+        [dto.nombre, dto.precio_venta, dto.id_categoria, id]
+    );
+    
+    }
+
+    async updateStock(id_producto: number, id_sucursal: number, stock: number) {
+    await this.db.query(
+        `INSERT INTO stock_sucursal (id_producto, id_sucursal, cantidad)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (id_producto, id_sucursal)
+        DO UPDATE SET cantidad = EXCLUDED.cantidad`,
+        [id_producto, id_sucursal, stock]
+    );
     }
 
     async findStockCompleto(id_sucursal: number) {

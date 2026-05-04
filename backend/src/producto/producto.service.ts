@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CreateProductoDto } from './dto/create-producto.dto';
 import { ProductoRepository } from './product.repository';
+import { UpdateProductoDto } from './dto/update-producto.dto';
 
 @Injectable()
 export class ProductoService {
@@ -13,21 +14,26 @@ export class ProductoService {
       return this.prodRepo.findStockBajo(id_sucursal);
     }
 
-    async create(dto: { nombre: string; precio_venta: number; id_categoria: number }) {
+    async create( dto: CreateProductoDto) {
         const categorias = await this.prodRepo.findCategorias();
         const existe = categorias.find(c => c.id_categoria === dto.id_categoria);
         if (!existe) return { ok: false, mensaje: 'Categoría no encontrada' };
 
-        const producto = await this.prodRepo.create(dto.nombre, dto.precio_venta, dto.id_categoria);
+        const producto = await this.prodRepo.create(dto);
         return { ok: true, producto };
     }
 
-    async update(id: number, dto: { nombre: string; precio_venta: number; id_categoria: number }) {
-        const existe = await this.prodRepo.findById(id);
-        if (!existe) return { ok: false, mensaje: 'Producto no encontrado' };
+    async update(id: number, dto: UpdateProductoDto) {
+      const existe = await this.prodRepo.findById(id);
+      if (!existe) return { ok: false, mensaje: 'Producto no encontrado' };
 
-        const producto = await this.prodRepo.update(id, dto.nombre, dto.precio_venta, dto.id_categoria);
-        return { ok: true, producto };
+      await this.prodRepo.updateProducto(id, dto);
+
+      if (dto.stock !== undefined && dto.id_sucursal !== undefined) {
+        await this.prodRepo.updateStock(id, dto.id_sucursal, dto.stock);
+      }
+
+      return { ok: true };
     }
 
     async findStockCompleto(id_sucursal: number) {

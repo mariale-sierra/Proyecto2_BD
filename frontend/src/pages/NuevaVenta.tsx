@@ -203,12 +203,13 @@ export default function NuevaVenta() {
   }
 
   const handleConfirmSale = async () => {
-    if (!employee || !selectedCustomerId) return
+    if (!employee || !selectedCustomerId || !branch) return
 
     try {
       const response = await ventasApi.crear({
         id_cliente: Number(selectedCustomerId),
         id_empleado: employee.id_empleado,
+        id_sucursal: branch.id_sucursal,
         items: cart.map((item) => ({
           id_producto: item.product.id_producto,
           cantidad: item.quantity,

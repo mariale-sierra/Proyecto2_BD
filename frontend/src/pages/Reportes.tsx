@@ -131,10 +131,6 @@ export default function Reportes() {
             ))}
           </SelectContent>
         </Select>
-
-        <Button onClick={() => selectedBranch && void loadReportData(Number(selectedBranch))}>
-          Ver reporte
-        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
