@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Search, Plus, Pencil, Package, AlertTriangle, XCircle } from 'lucide-react'
-import { products, type Product, formatCurrency } from '@/src/data/mock-data'
+import { productosApi } from '@/services/api/productos.api'
 import { useApp } from '@/src/App'
 import { SidePanel } from '@/src/components/SidePanel'
 import { Input } from '@/components/ui/input'
@@ -26,12 +26,28 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
-const categories = ['Todas', 'Bebidas', 'Lácteos'] as const
+interface Product {
+  id_producto: number
+  nombre: string
+  precio_venta: number
+  categoria: string
+  stock: number
+}
+
+interface Category {
+  id_categoria: number
+  nombre: string
+}
 
 interface FormErrors {
   name?: string
   price?: string
+  category?: string
   stock?: string
+}
+
+function formatCurrency(amount: number | string): string {
+  return `Q ${Number(amount).toFixed(2)}`
 }
 
 function getStockInfo(stock: number) {
@@ -41,24 +57,62 @@ function getStockInfo(stock: number) {
 }
 
 export default function Inventario() {
-  const { showToast } = useApp()
-  
+  const { branch, showToast } = useApp()
+
+  const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('Todas')
   const [panelOpen, setPanelOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [formData, setFormData] = useState({
     name: '',
-    category: 'Bebidas' as 'Bebidas' | 'Lácteos',
+    categoryId: '',
     price: '',
     stock: '',
   })
   const [formErrors, setFormErrors] = useState<FormErrors>({})
 
+  const loadCategories = async () => {
+    try {
+      const data = await productosApi.categorias() as Category[]
+      setCategories(data)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudieron cargar las categorias.'
+      showToast({ message, type: 'error' })
+    }
+  }
+
+  const loadProducts = async () => {
+    if (!branch?.id_sucursal) {
+      setProducts([])
+      return
+    }
+
+    try {
+      setLoading(true)
+      const data = await productosApi.findBySucursal(branch.id_sucursal, searchQuery.trim() || undefined) as Product[]
+      setProducts(data)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo cargar el inventario.'
+      showToast({ message, type: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadCategories()
+  }, [])
+
+  useEffect(() => {
+    void loadProducts()
+  }, [branch?.id_sucursal, searchQuery])
+
   const filteredProducts = products.filter((product) => {
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = categoryFilter === 'Todas' || product.category === categoryFilter
-    return matchesSearch && matchesCategory
+    const matchesCategory = categoryFilter === 'Todas' || product.categoria === categoryFilter
+    return matchesCategory
   })
 
   const stats = {
@@ -69,17 +123,23 @@ export default function Inventario() {
 
   const openNewPanel = () => {
     setEditingProduct(null)
-    setFormData({ name: '', category: 'Bebidas', price: '', stock: '' })
+    setFormData({
+      name: '',
+      categoryId: categories[0] ? String(categories[0].id_categoria) : '',
+      price: '',
+      stock: '',
+    })
     setFormErrors({})
     setPanelOpen(true)
   }
 
   const openEditPanel = (product: Product) => {
+    const category = categories.find((c) => c.nombre === product.categoria)
     setEditingProduct(product)
     setFormData({
-      name: product.name,
-      category: product.category,
-      price: product.price.toString(),
+      name: product.nombre,
+      categoryId: category ? String(category.id_categoria) : '',
+      price: product.precio_venta.toString(),
       stock: product.stock.toString(),
     })
     setFormErrors({})
@@ -94,38 +154,69 @@ export default function Inventario() {
 
   const validateForm = (): boolean => {
     const errors: FormErrors = {}
-    
+
     if (!formData.name.trim()) {
       errors.name = 'Este campo es obligatorio'
     }
-    
+
+    if (!formData.categoryId.trim()) {
+      errors.category = 'Selecciona una categoria'
+    }
+
     if (!formData.price.trim()) {
       errors.price = 'Este campo es obligatorio'
-    } else if (isNaN(parseFloat(formData.price)) || parseFloat(formData.price) < 0) {
-      errors.price = 'Ingresa un precio válido'
+    } else if (isNaN(Number(formData.price)) || Number(formData.price) < 0) {
+      errors.price = 'Ingresa un precio valido'
     }
-    
-    if (!formData.stock.trim()) {
-      errors.stock = 'Este campo es obligatorio'
-    } else if (parseInt(formData.stock) < 0) {
-      errors.stock = 'El stock no puede ser negativo'
-    }
-    
+
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) return
-    
-    closePanel()
-    showToast({ message: 'Producto guardado', type: 'success' })
+
+    try {
+      const payload = {
+        nombre: formData.name.trim(),
+        precio_venta: Number(formData.price),
+        id_categoria: Number(formData.categoryId),
+      }
+
+      if (editingProduct) {
+        await productosApi.update(editingProduct.id_producto, payload)
+      } else {
+        await productosApi.create(payload)
+      }
+
+      closePanel()
+      showToast({ message: 'Producto guardado', type: 'success' })
+      await loadProducts()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo guardar el producto.'
+      showToast({ message, type: 'error' })
+    }
   }
+
+  const handleDelete = async () => {
+    if (!editingProduct) return
+
+    try {
+      await productosApi.delete(editingProduct.id_producto)
+      closePanel()
+      showToast({ message: 'Producto eliminado', type: 'success' })
+      await loadProducts()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo eliminar el producto.'
+      showToast({ message, type: 'error' })
+    }
+  }
+
+  const categoryOptions = ['Todas', ...categories.map((c) => c.nombre)]
 
   return (
     <>
       <div className="space-y-6">
-        {/* Metric strip */}
         <div className="grid gap-4 sm:grid-cols-3">
           <Card>
             <CardContent className="flex items-center gap-4 p-4">
@@ -162,7 +253,6 @@ export default function Inventario() {
           </Card>
         </div>
 
-        {/* Filter bar */}
         <div className="flex flex-wrap items-center gap-4">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -178,7 +268,7 @@ export default function Inventario() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((category) => (
+              {categoryOptions.map((category) => (
                 <SelectItem key={category} value={category}>
                   {category}
                 </SelectItem>
@@ -191,58 +281,70 @@ export default function Inventario() {
           </Button>
         </div>
 
-        {/* Product table */}
         <Card>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Producto</TableHead>
-                <TableHead>Categoría</TableHead>
+                <TableHead>Categoria</TableHead>
                 <TableHead>Precio venta</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.map((product) => {
-                const stockInfo = getStockInfo(product.stock)
-                return (
-                  <TableRow key={product.id} className="hover:bg-muted/50">
-                    <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{product.category}</Badge>
-                    </TableCell>
-                    <TableCell>{formatCurrency(product.price)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Progress
-                          value={stockInfo.progress}
-                          className={cn('h-2 w-20', stockInfo.bgColor)}
-                        />
-                        <span className={cn('text-sm font-medium', stockInfo.color)}>
-                          {product.stock}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditPanel(product)}
-                      >
-                        <Pencil className="mr-1 h-4 w-4" />
-                        Editar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    Cargando inventario...
+                  </TableCell>
+                </TableRow>
+              ) : filteredProducts.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    No se encontraron productos.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredProducts.map((product) => {
+                  const stockInfo = getStockInfo(product.stock)
+                  return (
+                    <TableRow key={product.id_producto} className="hover:bg-muted/50">
+                      <TableCell className="font-medium">{product.nombre}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{product.categoria}</Badge>
+                      </TableCell>
+                      <TableCell>{formatCurrency(product.precio_venta)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Progress
+                            value={stockInfo.progress}
+                            className={cn('h-2 w-20', stockInfo.bgColor)}
+                          />
+                          <span className={cn('text-sm font-medium', stockInfo.color)}>
+                            {product.stock}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditPanel(product)}
+                        >
+                          <Pencil className="mr-1 h-4 w-4" />
+                          Editar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
             </TableBody>
           </Table>
         </Card>
       </div>
 
-      {/* Side Panel */}
       <SidePanel
         isOpen={panelOpen}
         onClose={closePanel}
@@ -265,25 +367,32 @@ export default function Inventario() {
               <p className="text-sm text-destructive">{formErrors.name}</p>
             )}
           </div>
-          
+
           <div className="space-y-2">
-            <Label htmlFor="category">Categoría *</Label>
+            <Label htmlFor="category">Categoria *</Label>
             <Select
-              value={formData.category}
-              onValueChange={(value) =>
-                setFormData({ ...formData, category: value as 'Bebidas' | 'Lácteos' })
-              }
+              value={formData.categoryId}
+              onValueChange={(value) => {
+                setFormData({ ...formData, categoryId: value })
+                if (formErrors.category) setFormErrors({ ...formErrors, category: undefined })
+              }}
             >
-              <SelectTrigger id="category">
-                <SelectValue />
+              <SelectTrigger id="category" className={formErrors.category ? 'border-destructive' : ''}>
+                <SelectValue placeholder="Selecciona categoria" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Bebidas">Bebidas</SelectItem>
-                <SelectItem value="Lácteos">Lácteos</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id_categoria} value={String(category.id_categoria)}>
+                    {category.nombre}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {formErrors.category && (
+              <p className="text-sm text-destructive">{formErrors.category}</p>
+            )}
           </div>
-          
+
           <div className="space-y-2">
             <Label htmlFor="price">Precio venta *</Label>
             <Input
@@ -302,29 +411,31 @@ export default function Inventario() {
               <p className="text-sm text-destructive">{formErrors.price}</p>
             )}
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="stock">Stock inicial *</Label>
-            <Input
-              id="stock"
-              type="number"
-              value={formData.stock}
-              onChange={(e) => {
-                setFormData({ ...formData, stock: e.target.value })
-                if (formErrors.stock) setFormErrors({ ...formErrors, stock: undefined })
-              }}
-              placeholder="0"
-              className={formErrors.stock ? 'border-destructive' : ''}
-            />
-            {formErrors.stock && (
-              <p className="text-sm text-destructive">{formErrors.stock}</p>
-            )}
-          </div>
+
+          {editingProduct && (
+            <div className="space-y-2">
+              <Label htmlFor="stock">Stock actual</Label>
+              <Input
+                id="stock"
+                type="number"
+                value={formData.stock}
+                onChange={(e) => {
+                 setFormData({ ...formData, stock: e.target.value })
+                 if (formErrors.stock) setFormErrors({ ...formErrors, stock: undefined })
+                }}   
+                />
+            </div>
+          )}
 
           <div className="flex gap-3 pt-4">
             <Button variant="outline" className="flex-1" onClick={closePanel}>
               Cancelar
             </Button>
+            {editingProduct && (
+              <Button variant="destructive" className="flex-1" onClick={handleDelete}>
+                Eliminar
+              </Button>
+            )}
             <Button className="flex-1" onClick={handleSave}>
               Guardar
             </Button>

@@ -1,17 +1,19 @@
 import { useState, useEffect, useRef } from 'react'
-import { getEmployeeByCarnet, type Employee } from '@/src/data/mock-data'
+import { empleadosApi } from '@/services/api/empleados.api'
+import type { AuthEmployee } from '@/src/App'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import styles from './CarnetOverlay.module.scss'
 
 interface CarnetOverlayProps {
   isOpen: boolean
-  onAuthenticate: (employee: Employee) => void
+  onAuthenticate: (employee: AuthEmployee) => void
 }
 
 export function CarnetOverlay({ isOpen, onAuthenticate }: CarnetOverlayProps) {
   const [carnet, setCarnet] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -22,18 +24,27 @@ export function CarnetOverlay({ isOpen, onAuthenticate }: CarnetOverlayProps) {
 
   if (!isOpen) return null
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    const employee = getEmployeeByCarnet(carnet)
-    
-    if (employee) {
+
+    const carnetNumber = Number(carnet)
+    if (!Number.isFinite(carnetNumber)) {
+      setError('Ingresa un carnet valido.')
+      return
+    }
+
+    try {
+      setLoading(true)
+      const employee = await empleadosApi.findByCarnet(carnetNumber) as AuthEmployee
       setError('')
       setCarnet('')
       onAuthenticate(employee)
-    } else {
-      setError('Carnet no encontrado. Intenta de nuevo.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Carnet no encontrado. Intenta de nuevo.'
+      setError(message)
       inputRef.current?.focus()
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -68,8 +79,8 @@ export function CarnetOverlay({ isOpen, onAuthenticate }: CarnetOverlayProps) {
             )}
           </div>
           
-          <Button type="submit" className={styles.submitButton}>
-            Confirmar
+          <Button type="submit" className={styles.submitButton} disabled={loading}>
+            {loading ? 'Validando...' : 'Confirmar'}
           </Button>
         </form>
       </div>

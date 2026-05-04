@@ -12,6 +12,10 @@ export class ClienteService {
   async findByNit(nit: string) {
     return this.clienteRepo.findByNit(nit);
   }
+  
+  async buscar(q: string) {
+      return await this.clienteRepo.buscar(q);
+  }
 
   async findFrecuentes() {
     return this.clienteRepo.findFrecuentes();

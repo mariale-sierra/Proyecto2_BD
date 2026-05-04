@@ -4,11 +4,11 @@ import { Empleado } from './entities/empleado.entity';
 
 @Injectable()
 export class EmpleadoRepository {
-    constructor(@Inject('DATABASE_POOL') private db: Pool) {}
+    constructor(@Inject('DB_POOL') private db: Pool) {}
 
     async findAll() {
         const res = await this.db.query(
-            `SELECT e-id_empleado, e.nombre, e.apellido, e.es_gerente,
+            `SELECT e.id_empleado, e.nombre, e.apellido, e.es_gerente,
             e.salario, e.id_sucursal, s.nombre AS nombre_sucursal
             FROM empleado e
             JOIN sucursal s ON e.id_sucursal = s.id_sucursal

@@ -4,6 +4,16 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    host: true,
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://backend:3000',
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),

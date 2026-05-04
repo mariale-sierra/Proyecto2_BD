@@ -83,4 +83,19 @@ export class ClienteRepository {
             Number(r.total_compras ?? 0)
         ));
     }
+
+    async buscar(q: string) {
+    const res = await this.db.query(
+        `SELECT c.id_cliente, c.nombre, c.telefono, c.nit,
+                COUNT(v.id_venta) AS total_compras
+         FROM cliente c
+         LEFT JOIN venta v ON c.id_cliente = v.id_cliente
+         WHERE LOWER(c.nombre) LIKE LOWER('%' || $1 || '%')
+             OR c.nit = $1
+         GROUP BY c.id_cliente
+         ORDER BY total_compras DESC`,
+        [q]
+    );
+    return res.rows;
+}
 }

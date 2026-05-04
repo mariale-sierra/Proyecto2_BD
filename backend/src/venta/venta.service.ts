@@ -10,37 +10,49 @@ export class VentaService {
         @Inject('DB_POOL') private db: Pool 
     ) {}
 
-    async crearVenta(dto: CreateVentaDto): Promise<{ ok: boolean; id_venta?: number; mensaje?: string }> {
-        const client = await this.db.connect();
-        try {
-            await client.query('BEGIN');
+    async crearVenta(dto: CreateVentaDto) {
+    const client = await this.db.connect();
+    try {
+        await client.query('BEGIN');
 
-            const total = dto.items.reduce(
-                (sum, item) => sum + item.cantidad * item.precio_unitario, 0
-            );
+        const empleadoRes = await client.query(
+            `SELECT id_sucursal FROM empleado WHERE id_empleado = $1`,
+            [dto.id_empleado]
+        );
 
-            const id_venta = await this.ventasRepo.insertarVenta(
-                dto.id_cliente, dto.id_empleado, dto.id_sucursal, total, client  // pasas el client
-            );
-
-            for (const item of dto.items) {
-                await this.ventasRepo.insertarDetalle(
-                    id_venta, item.id_producto, item.cantidad, item.precio_unitario, client
-                );
-                await this.ventasRepo.descontarStock(
-                    item.id_producto, dto.id_sucursal, item.cantidad, client
-                );
-            }
-
-            await client.query('COMMIT');
-            return { ok: true, id_venta };
-
-        } catch (err) {
+        if (empleadoRes.rows.length === 0) {
             await client.query('ROLLBACK');
-            const mensaje = err instanceof Error ? err.message : String(err);
-            return { ok: false, mensaje: 'Error al registrar la venta: ' + mensaje };
-        } finally {
-            client.release();  
+            return { ok: false, mensaje: 'Empleado no encontrado' };
         }
+
+        const id_sucursal = empleadoRes.rows[0].id_sucursal;
+
+        const total = dto.items.reduce(
+            (sum, item) => sum + item.cantidad * item.precio_unitario, 0
+        );
+
+        const id_venta = await this.ventasRepo.insertarVenta(
+            dto.id_cliente, dto.id_empleado, id_sucursal, total, client 
+        );
+
+        for (const item of dto.items) {
+            await this.ventasRepo.insertarDetalle(
+                id_venta, item.id_producto, item.cantidad, item.precio_unitario, client
+            );
+            await this.ventasRepo.descontarStock(
+                item.id_producto, id_sucursal, item.cantidad, client 
+            );
+        }
+
+        await client.query('COMMIT');
+        return { ok: true, id_venta, id_sucursal };
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        const mensaje = err instanceof Error ? err.message : String(err);
+        return { ok: false, mensaje: 'Error al registrar la venta: ' + mensaje };
+    } finally {
+        client.release();
     }
+}
 }

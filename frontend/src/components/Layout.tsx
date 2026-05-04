@@ -1,6 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
-import { branches, isManager } from '@/src/data/mock-data'
 import { useApp } from '@/src/App'
 import styles from './Layout.module.scss'
 import {
@@ -24,9 +23,12 @@ const managerTabs = [
 ]
 
 export default function Layout() {
-  const { employee, branch, setBranch, showCarnetOverlay } = useApp()
+  const { employee, branch, branches, setBranch, showCarnetOverlay } = useApp()
 
-  const tabs = employee && isManager(employee) ? managerTabs : baseTabs
+  const tabs = employee?.es_gerente ? managerTabs : baseTabs
+  const employeeInitials = employee
+    ? `${employee.nombre[0] ?? ''}${employee.apellido[0] ?? ''}`.toUpperCase()
+    : ''
 
   return (
     <div className={styles.shell}>
@@ -36,20 +38,20 @@ export default function Layout() {
 
           <DropdownMenu>
             <DropdownMenuTrigger className={styles.branchTrigger}>
-              <span>{branch.name}</span>
+              <span>{branch?.nombre ?? 'Cargando sucursales...'}</span>
               <ChevronDown className={styles.branchChevron} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center">
               {branches.map((b) => (
                 <DropdownMenuItem
-                  key={b.id}
+                  key={b.id_sucursal}
                   onClick={() => setBranch(b)}
                   className={cn(
                     'cursor-pointer',
-                    branch.id === b.id && 'bg-accent'
+                    branch?.id_sucursal === b.id_sucursal && 'bg-accent'
                   )}
                 >
-                  {b.name}
+                  {b.nombre}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -59,10 +61,10 @@ export default function Layout() {
             <div className={styles.employeeArea}>
               <div className={styles.employeeChip}>
                 <span className={styles.employeeAvatar}>
-                  {employee.initials}
+                  {employeeInitials}
                 </span>
                 <span className={styles.employeeName}>
-                  {employee.name}
+                  {employee.nombre} {employee.apellido}
                 </span>
               </div>
               <button

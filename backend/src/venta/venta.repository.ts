@@ -4,6 +4,7 @@ import { Injectable, Inject } from '@nestjs/common';
 @Injectable()
 export class VentaRepository {
     constructor(@Inject('DB_POOL') private db: Pool) {}
+    
     async insertarVenta(
         id_cliente: number,
         id_empleado: number,
