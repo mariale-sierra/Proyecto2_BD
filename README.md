@@ -41,6 +41,14 @@ docker compose up --build
 
 ---
 
+# 👤 Modelo del sistema
+
+En este archivo se encuentran los diagramas y dependencias explicadas para entender el sistema y que corresponden a las primeras tareas de la rúbrica de evaluación
+https://docs.google.com/document/d/17fy9KTf-4FbpkY6U6HHbUKlLCPNzw8P35lCBo34G9Ro/edit?usp=sharing 
+
+
+---
+
 # 🧠 Tareas implementadas de la rúbrica de evaluación
 
 ## 🔗 3 consultas con JOIN (múltiples tablas)
