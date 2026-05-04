@@ -86,9 +86,7 @@ La creación de venta implementa una transacción:
 
 ---
 
-# 🖥️ Aplicación Web
-
-## CRUD implementados
+## 🖥️ CRUD implementados
 
 * Productos + Categorías
 * Clientes
@@ -112,5 +110,3 @@ La creación de venta implementa una transacción:
 * Manejo de errores en backend
 * Rollback en transacciones (ej: stock insuficiente)
 
-
-y además incorpora mejoras como soporte multi-sucursal y control de inventario en tiempo real.
