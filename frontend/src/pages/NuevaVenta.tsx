@@ -229,6 +229,7 @@ export default function NuevaVenta() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo registrar la venta.'
       setInlineError(message)
+      showToast({ message, type: 'error' })
       setConfirmModalOpen(false)
     }
   }

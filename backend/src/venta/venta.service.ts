@@ -1,67 +1,66 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { CreateVentaDto } from './dto/create-venta.dto';
 import { VentaRepository } from './venta.repository';
-import { Pool } from 'pg';
+import { Empleado } from '../empleado/entities/empleado.entity';
 
 @Injectable()
 export class VentaService {
     constructor(
-        private ventasRepo: VentaRepository,
-        @Inject('DB_POOL') private db: Pool 
+        private readonly ventasRepo: VentaRepository,
+        private readonly dataSource: DataSource,
     ) {}
 
     async crearVenta(dto: CreateVentaDto) {
-    const client = await this.db.connect();
-    try {
-        await client.query('BEGIN');
+        try {
+            return await this.dataSource.transaction(async (manager) => {
+                const empleado = await manager.getRepository(Empleado).findOne({
+                    where: { id_empleado: dto.id_empleado },
+                    relations: { sucursal: true },
+                });
 
-        const empleadoRes = await client.query(
-            `SELECT id_sucursal FROM empleado WHERE id_empleado = $1`,
-            [dto.id_empleado]
-        );
+                if (!empleado) {
+                    throw new Error('Empleado no encontrado');
+                }
 
-        if (empleadoRes.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return { ok: false, mensaje: 'Empleado no encontrado' };
+                if (Number(empleado.id_sucursal) !== Number(dto.id_sucursal)) {
+                    throw new Error('Empleado no pertenece a esta sucursal');
+                }
+
+                const total = dto.items.reduce(
+                    (sum, item) => sum + item.cantidad * item.precio_unitario,
+                    0,
+                );
+
+                const id_venta = await this.ventasRepo.insertarVenta(
+                    manager,
+                    dto.id_cliente,
+                    dto.id_empleado,
+                    dto.id_sucursal,
+                    total,
+                );
+
+                for (const item of dto.items) {
+                    await this.ventasRepo.insertarDetalle(
+                        manager,
+                        id_venta,
+                        item.id_producto,
+                        item.cantidad,
+                        item.precio_unitario,
+                    );
+                    await this.ventasRepo.descontarStock(
+                        manager,
+                        item.id_producto,
+                        dto.id_sucursal,
+                        item.cantidad,
+                    );
+                }
+
+                return { ok: true, id_venta, id_sucursal: dto.id_sucursal, mensaje: 'Venta registrada exitosamente' };
+            });
+        } catch (err) {
+            const mensaje = err instanceof Error ? err.message : String(err);
+            return { ok: false, mensaje: 'Error al registrar la venta: ' + mensaje };
         }
-
-        const id_sucursal_empleado = Number(empleadoRes.rows[0].id_sucursal);
-        const id_sucursal_dto = Number(dto.id_sucursal);
-
-        if (id_sucursal_empleado !== id_sucursal_dto) {
-        await client.query('ROLLBACK');
-        return { ok: false, mensaje: 'Empleado no pertenece a esta sucursal' };
-        }
-                
-
-
-        const total = dto.items.reduce(
-            (sum, item) => sum + item.cantidad * item.precio_unitario, 0
-        );
-
-        const id_venta = await this.ventasRepo.insertarVenta(
-            dto.id_cliente, dto.id_empleado, dto.id_sucursal, total, client 
-        );
-
-        for (const item of dto.items) {
-            await this.ventasRepo.insertarDetalle(
-                id_venta, item.id_producto, item.cantidad, item.precio_unitario, client
-            );
-            await this.ventasRepo.descontarStock(
-                item.id_producto, dto.id_sucursal, item.cantidad, client 
-            );
-        }
-
-        await client.query('COMMIT');
-        return { ok: true, id_venta, id_sucursal: dto.id_sucursal };
-
-    } catch (err) {
-        console.error('ERROR REAL:', err); 
-        await client.query('ROLLBACK');
-        const mensaje = err instanceof Error ? err.message : String(err);
-        return { ok: false, mensaje: 'Error al registrar la venta: ' + mensaje };
-    } finally {
-        client.release();
     }
-}
 }

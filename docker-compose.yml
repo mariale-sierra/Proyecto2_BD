@@ -4,7 +4,7 @@ services:
     image: postgres:15
     container_name: postgres_db
     environment:
-      POSTGRES_USER: proy2
+      POSTGRES_USER: proy3
       POSTGRES_PASSWORD: secret
       POSTGRES_DB: tienda
     ports:

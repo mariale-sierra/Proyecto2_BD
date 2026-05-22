@@ -4,7 +4,7 @@ export class UpdateProductoDto {
   precio_venta?: number;
   id_categoria?: number;
   stock?: number;
-  id_sucursal?: number; 
+  id_sucursal?: number;
   constructor(
     nombre?: string,
     precio_venta?: number,

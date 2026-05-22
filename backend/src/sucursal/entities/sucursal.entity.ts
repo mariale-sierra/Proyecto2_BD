@@ -1,24 +1,30 @@
-export class Sucursal {
-    id_sucursal: number;
-    nombre: string;
-    telefono: string;
-    direccion: string;
-    hora_abre: string;
-    hora_cierra: string;
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Empleado } from '../../empleado/entities/empleado.entity';
+import { Venta } from '../../venta/entities/venta.entity';
 
-    constructor(
-        id_sucursal: number,
-        nombre: string,
-        telefono: string,
-        direccion: string,
-        hora_abre: string,
-        hora_cierra: string
-    ) {
-        this.id_sucursal = id_sucursal;
-        this.nombre = nombre;
-        this.telefono = telefono;
-        this.direccion = direccion;
-        this.hora_abre = hora_abre;
-        this.hora_cierra = hora_cierra;
-    }
+@Entity({ name: 'sucursal' })
+export class Sucursal {
+  @PrimaryGeneratedColumn({ name: 'id_sucursal' })
+  id_sucursal!: number;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  nombre!: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  telefono!: string;
+
+  @Column({ type: 'text', nullable: true })
+  direccion!: string;
+
+  @Column({ type: 'time', name: 'hora_abre', nullable: true })
+  hora_abre!: string;
+
+  @Column({ type: 'time', name: 'hora_cierra', nullable: true })
+  hora_cierra!: string;
+
+  @OneToMany(() => Empleado, (empleado) => empleado.sucursal)
+  empleados?: Empleado[];
+
+  @OneToMany(() => Venta, (venta) => venta.sucursal)
+  ventas?: Venta[];
 }

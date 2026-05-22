@@ -20,24 +20,28 @@ export class ProductoService {
         if (!existe) return { ok: false, mensaje: 'Categoría no encontrada' };
 
         const producto = await this.prodRepo.create(dto);
-        return { ok: true, producto };
+        return { ok: true, producto, mensaje: 'Producto creado exitosamente' };
     }
 
     async update(id: number, dto: UpdateProductoDto) {
       const existe = await this.prodRepo.findById(id);
       if (!existe) return { ok: false, mensaje: 'Producto no encontrado' };
 
-      await this.prodRepo.updateProducto(id, dto);
+      const producto = await this.prodRepo.updateProducto(id, dto);
 
       if (dto.stock !== undefined && dto.id_sucursal !== undefined) {
         await this.prodRepo.updateStock(id, dto.id_sucursal, dto.stock);
       }
 
-      return { ok: true };
+      return { ok: true, producto, mensaje: 'Producto actualizado exitosamente' };
     }
 
     async findStockCompleto(id_sucursal: number) {
       return this.prodRepo.findStockCompleto(id_sucursal);
+    }
+
+    async findById(id: number) {
+      return this.prodRepo.findById(id);
     }
 
     async delete(id: number) {

@@ -41,7 +41,7 @@ export class ClienteService {
   }
 
   async delete(id:number) {
-    const existe = await this.clienteRepo.findByNit(id.toString());
+    const existe = await this.clienteRepo.findById(id);
     if (!existe) {
       return {ok: false, mensaje: `Cliente no encontrado`};
     }

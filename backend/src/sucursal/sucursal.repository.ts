@@ -1,55 +1,65 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Sucursal } from './entities/sucursal.entity';
 
 @Injectable()
 export class SucursalRepository {
-    constructor(@Inject('DB_POOL') private db: Pool) {}
+    constructor(
+        @InjectRepository(Sucursal)
+        private readonly sucursalRepository: Repository<Sucursal>,
+    ) {}
 
     async findAll() {
-        const res = await this.db.query(
-            `SELECT s.id_sucursal, s.nombre, s.telefono, s.direccion,
-                    s.hora_abre, s.hora_cierra,
-                    e.id_empleado AS id_gerente,
-                    e.nombre || ' ' || e.apellido AS gerente
-             FROM sucursal s
-             LEFT JOIN empleado e 
-                ON e.id_sucursal = s.id_sucursal 
-                AND e.es_gerente = true
-             ORDER BY s.nombre`
-        );
-        return res.rows;
+        return this.sucursalRepository
+            .createQueryBuilder('sucursal')
+            .leftJoin('sucursal.empleados', 'empleado', 'empleado.es_gerente = true')
+            .select('sucursal.id_sucursal', 'id_sucursal')
+            .addSelect('sucursal.nombre', 'nombre')
+            .addSelect('sucursal.telefono', 'telefono')
+            .addSelect('sucursal.direccion', 'direccion')
+            .addSelect('sucursal.hora_abre', 'hora_abre')
+            .addSelect('sucursal.hora_cierra', 'hora_cierra')
+            .addSelect('empleado.id_empleado', 'id_gerente')
+            .addSelect("CONCAT(empleado.nombre, ' ', empleado.apellido)", 'gerente')
+            .orderBy('sucursal.nombre', 'ASC')
+            .getRawMany();
     }
 
     async findById(id: number) {
-        const res = await this.db.query(
-            `SELECT * FROM sucursal WHERE id_sucursal = $1`,
-            [id]
-        );
-        return res.rows[0] || null;
+        return this.sucursalRepository.findOneBy({ id_sucursal: id });
     }
 
     async create(nombre: string, telefono: string, direccion: string, hora_abre: string, hora_cierra: string) {
-        const res = await this.db.query(
-            `INSERT INTO sucursal (nombre, telefono, direccion, hora_abre, hora_cierra)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [nombre, telefono, direccion, hora_abre, hora_cierra]
-        );
-        const r = res.rows[0];
-        return new Sucursal(r.id_sucursal, r.nombre, r.telefono, r.direccion, r.hora_abre, r.hora_cierra);
+        const sucursal = this.sucursalRepository.create({
+            nombre,
+            telefono,
+            direccion,
+            hora_abre,
+            hora_cierra,
+        });
+
+        return this.sucursalRepository.save(sucursal);
     }
 
     async update(id: number, nombre: string, telefono: string, direccion: string, hora_abre: string, hora_cierra: string) {
-        const res = await this.db.query(
-            `UPDATE sucursal SET nombre=$1, telefono=$2, direccion=$3, hora_abre=$4, hora_cierra=$5
-             WHERE id_sucursal=$6 RETURNING *`,
-            [nombre, telefono, direccion, hora_abre, hora_cierra, id]
-        );
-        const r = res.rows[0];
-        return r ? new Sucursal(r.id_sucursal, r.nombre, r.telefono, r.direccion, r.hora_abre, r.hora_cierra) : null;
+        const sucursal = await this.sucursalRepository.preload({
+            id_sucursal: id,
+            nombre,
+            telefono,
+            direccion,
+            hora_abre,
+            hora_cierra,
+        });
+
+        if (!sucursal) {
+            return null;
+        }
+
+        return this.sucursalRepository.save(sucursal);
     }
 
     async delete(id: number) {
-        await this.db.query(`DELETE FROM sucursal WHERE id_sucursal = $1`, [id]);
+        await this.sucursalRepository.delete(id);
     }
 }

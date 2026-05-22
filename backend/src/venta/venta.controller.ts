@@ -9,10 +9,15 @@ export class VentaController {
   @Post()
   @HttpCode(201)
   async crearVenta(@Body() dto: CreateVentaDto) {
-    const resultado = await this.ventaService.crearVenta(dto);
-    if(!resultado.ok) {
-      throw new HttpException(resultado.mensaje || 'Error al crear venta', 400);
-    }
-    return { id_venta: resultado.id_venta };  
+  const resultado = await this.ventaService.crearVenta(dto);
+
+  if (!('id_venta' in resultado)) {
+    return { mensaje: resultado.mensaje };
   }
+
+  return {
+    id_venta: resultado.id_venta,
+    mensaje: resultado.mensaje
+  };
+}
 }

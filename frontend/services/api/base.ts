@@ -11,8 +11,10 @@ export async function apiFetch<T>(
     });
 
     if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || 'Error en el servidor');
+        const error = await res.json().catch(() => null);
+        const rawMessage = error?.message ?? error?.mensaje ?? error?.error ?? 'Error en el servidor';
+        const message = Array.isArray(rawMessage) ? rawMessage.join(', ') : String(rawMessage);
+        throw new Error(message);
     }
 
     return res.json();

@@ -1,82 +1,102 @@
-import { Injectable, Inject } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Empleado } from './entities/empleado.entity';
+import { Sucursal } from '../sucursal/entities/sucursal.entity';
 
 @Injectable()
 export class EmpleadoRepository {
-    constructor(@Inject('DB_POOL') private db: Pool) {}
+    constructor(
+        @InjectRepository(Empleado)
+        private readonly empleadoRepository: Repository<Empleado>,
+    ) {}
 
     async findAll() {
-        const res = await this.db.query(
-            `SELECT e.id_empleado, e.nombre, e.apellido, e.es_gerente,
-            e.salario, e.id_sucursal, s.nombre AS nombre_sucursal
-            FROM empleado e
-            JOIN sucursal s ON e.id_sucursal = s.id_sucursal
-            ORDER BY s.nombre, e.apellido`
-        )
-        return res.rows;
+        return this.empleadoRepository
+            .createQueryBuilder('empleado')
+            .leftJoin('empleado.sucursal', 'sucursal')
+            .select('empleado.id_empleado', 'id_empleado')
+            .addSelect('empleado.nombre', 'nombre')
+            .addSelect('empleado.apellido', 'apellido')
+            .addSelect('empleado.es_gerente', 'es_gerente')
+            .addSelect('empleado.salario', 'salario')
+            .addSelect('empleado.id_sucursal', 'id_sucursal')
+            .addSelect('sucursal.nombre', 'nombre_sucursal')
+            .orderBy('sucursal.nombre', 'ASC')
+            .addOrderBy('empleado.apellido', 'ASC')
+            .getRawMany();
     }
 
     async findById(id: number) {
-        const res = await this.db.query(
-            `SELECT * FROM empleado WHERE id_empleado = $1`,
-            [id]
-        );
-        return res.rows[0] || null;
+        return this.empleadoRepository.findOneBy({ id_empleado: id });
     }
 
     async findByCarnet(id_empleado: number) {
-        const res = await this.db.query(
-            `SELECT e.id_empleado, e.nombre, e.apellido, e.es_gerente, e.salario, s.nombre AS nombre_sucursal
-            FROM empleado e
-            JOIN sucursal s ON e.id_sucursal = s.id_sucursal
-            WHERE e.id_empleado = $1`,
-            [id_empleado]
-        )
-        return res.rows[0] || null;
+        return this.empleadoRepository
+            .createQueryBuilder('empleado')
+            .leftJoin('empleado.sucursal', 'sucursal')
+            .select('empleado.id_empleado', 'id_empleado')
+            .addSelect('empleado.nombre', 'nombre')
+            .addSelect('empleado.apellido', 'apellido')
+            .addSelect('empleado.es_gerente', 'es_gerente')
+            .addSelect('empleado.salario', 'salario')
+            .addSelect('sucursal.nombre', 'nombre_sucursal')
+            .where('empleado.id_empleado = :id_empleado', { id_empleado })
+            .getRawOne();
     }
 
     async findBySucursal(id_sucursal: number) {
-        const res = await this.db.query(
-            `SELECT id_empleado, nombre, apellido, es_gerente, salario FROM empleado
-            WHERE id_sucursal = $1
-            ORDER BY apellido`,
-            [id_sucursal]
-        );
-        return res.rows; 
+        return this.empleadoRepository.find({
+            where: { id_sucursal },
+            order: { apellido: 'ASC' },
+        });
     }
 
     async create(nombre: string, apellido: string, es_gerente: boolean, salario: number, id_sucursal: number) {
-        const res = await this.db.query(
-            `INSERT INTO empleado (nombre, apellido, es_gerente, salario, id_sucursal)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [nombre, apellido, es_gerente, salario, id_sucursal]
-        );
-        const r = res.rows[0];
-        return new Empleado(r.id_empleado, r.nombre, r.apellido, r.es_gerente, r.salario, r.id_sucursal);
+        const empleado = this.empleadoRepository.create({
+            nombre,
+            apellido,
+            es_gerente,
+            salario,
+            id_sucursal,
+            sucursal: { id_sucursal } as Sucursal,
+        });
+
+        return this.empleadoRepository.save(empleado);
     }
 
     async update(id: number, nombre: string, apellido: string, es_gerente: boolean, salario: number, id_sucursal: number) {
-        const res = await this.db.query(
-            `UPDATE empleado SET nombre=$1, apellido=$2, es_gerente=$3, salario=$4, id_sucursal=$5
-             WHERE id_empleado=$6 RETURNING *`,
-            [nombre, apellido, es_gerente, salario, id_sucursal, id]
-        );
-        const r = res.rows[0];
-        return r ? new Empleado(r.id_empleado, r.nombre, r.apellido, r.es_gerente, r.salario, r.id_sucursal) : null;
+        const empleado = await this.empleadoRepository.preload({
+            id_empleado: id,
+            nombre,
+            apellido,
+            es_gerente,
+            salario,
+            id_sucursal,
+            sucursal: { id_sucursal } as Sucursal,
+        });
+
+        if (!empleado) {
+            return null;
+        }
+
+        return this.empleadoRepository.save(empleado);
     }
 
     async delete(id: number) {
-        await this.db.query(`DELETE FROM empleado WHERE id_empleado = $1`, [id]);
+        await this.empleadoRepository.delete(id);
     }
 
     async countGerentes(id_sucursal: number, excluir_id?: number): Promise<number> {
-        const res = await this.db.query(
-            `SELECT COUNT(*) FROM empleado
-             WHERE id_sucursal = $1 AND es_gerente = true
-             AND ($2::int IS NULL OR id_empleado != $2)`,
-            [id_sucursal, excluir_id ?? null]
-        );
-        return Number(res.rows[0].count);
+        const query = this.empleadoRepository
+            .createQueryBuilder('empleado')
+            .where('empleado.id_sucursal = :id_sucursal', { id_sucursal })
+            .andWhere('empleado.es_gerente = true');
+
+        if (excluir_id !== undefined) {
+            query.andWhere('empleado.id_empleado != :excluir_id', { excluir_id });
+        }
+
+        return query.getCount();
     }
 }

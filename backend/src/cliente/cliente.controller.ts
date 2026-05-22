@@ -4,7 +4,7 @@ import { CreateClienteDto } from './dto/create-cliente.dto';
 
 @Controller('cliente')
 export class ClienteController {
-    constructor(private clienteService: ClienteService) {}  // ← sin Pool
+    constructor(private clienteService: ClienteService) {} 
 
     @Get()
     async findAll() {

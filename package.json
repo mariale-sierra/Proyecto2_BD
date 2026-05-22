@@ -1,6 +1,8 @@
 {
   "dependencies": {
-    "pg": "^8.20.0"
+    "@nestjs/typeorm": "^11.0.1",
+    "pg": "^8.21.0",
+    "typeorm": "^1.0.0"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0"

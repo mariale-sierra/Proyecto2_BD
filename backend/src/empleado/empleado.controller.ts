@@ -1,6 +1,7 @@
-// empleado/empleado.controller.ts
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, HttpException } from '@nestjs/common';
 import { EmpleadoService } from './empleado.service';
+import { CreateEmpleadoDto } from './dto/create-empleado.dto';
+import { UpdateEmpleadoDto } from './dto/update-empleado.dto';
 
 @Controller('empleado')
 export class EmpleadoController {
@@ -24,14 +25,14 @@ export class EmpleadoController {
     }
 
     @Post()             
-    async create(@Body() dto: { nombre: string; apellido: string; es_gerente: boolean; salario: number; id_sucursal: number }) {
+    async create(@Body() dto: CreateEmpleadoDto) {
         const resultado = await this.empleadoService.create(dto);
         if (!resultado.ok) throw new HttpException(resultado.mensaje ?? 'Error', 400);
         return resultado.empleado;
     }
 
     @Put(':id')                       
-    async update(@Param('id') id: string, @Body() dto: { nombre: string; apellido: string; es_gerente: boolean; salario: number; id_sucursal: number }) {
+    async update(@Param('id') id: string, @Body() dto: UpdateEmpleadoDto) {
         const resultado = await this.empleadoService.update(Number(id), dto);
         if (!resultado.ok) throw new HttpException(resultado.mensaje ?? 'Error', 400);
         return resultado.empleado;

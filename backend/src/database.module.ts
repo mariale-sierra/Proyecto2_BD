@@ -1,20 +1,26 @@
-import { Module, Global } from '@nestjs/common';
-import { Pool } from 'pg';
+import { Global, Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Global()
 @Module({
-    providers: [
-        {
-            provide: 'DB_POOL',
-            useFactory: () => new Pool({
-                host: process.env.DB_HOST,
-                port: Number(process.env.DB_PORT),
-                database: process.env.DB_NAME,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASSWORD,
+    imports: [
+        ConfigModule,
+        TypeOrmModule.forRootAsync({
+            inject: [ConfigService],
+            useFactory: (configService: ConfigService) => ({
+                type: 'postgres' as const,
+                host: configService.get<string>('DB_HOST'),
+                port: Number(configService.get<string>('DB_PORT')),
+                database: configService.get<string>('DB_NAME'),
+                username: configService.get<string>('DB_USER'),
+                password: configService.get<string>('DB_PASSWORD'),
+                autoLoadEntities: true,
+                synchronize: false,
+                logging: false,
             }),
-        },
+        }),
     ],
-    exports: ['DB_POOL'],
+    exports: [TypeOrmModule],
 })
 export class DatabaseModule {}

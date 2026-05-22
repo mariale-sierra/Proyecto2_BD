@@ -1,23 +1,25 @@
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Venta } from '../../venta/entities/venta.entity';
+
+@Entity({ name: 'cliente' })
 export class Cliente {
-    id_cliente: number;
-    nombre: string;
-    telefono: string;
-    correo?: string;
-    nit: string;
-    total_compras?: number;
-    constructor(
-        id_cliente: number,
-        nombre: string,
-        telefono: string,
-        correo: string | undefined,
-        nit: string,
-        total_compras?: number,
-    ) {
-        this.id_cliente = id_cliente;
-        this.nombre = nombre;
-        this.telefono = telefono;
-        this.correo = correo;
-        this.nit = nit;
-        this.total_compras = total_compras;
-    }
+  @PrimaryGeneratedColumn({ name: 'id_cliente' })
+  id_cliente!: number;
+
+  @Column({ type: 'varchar', length: 100 })
+  nombre!: string;
+
+  @Column({ type: 'varchar', length: 20 })
+  telefono!: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  correo?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  nit!: string;
+
+  total_compras?: number;
+
+  @OneToMany(() => Venta, (venta) => venta.cliente)
+  ventas?: Venta[];
 }

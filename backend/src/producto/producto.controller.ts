@@ -39,7 +39,7 @@ export class ProductoController {
 
     @Get(':id')                        
     async findById(@Param('id') id: string) {
-        return await this.productoService.findBySucursal(Number(id));
+        return await this.productoService.findById(Number(id));
     }
 
     @Post()                            
@@ -51,11 +51,13 @@ export class ProductoController {
     }
 
     @Put(':id')
-    update(
+    async update(
     @Param('id') id: number,
     @Body() dto: UpdateProductoDto
     ) {
-    return this.productoService.update(id, dto);
+    const resultado = await this.productoService.update(Number(id), dto);
+    if (!resultado.ok) throw new HttpException(resultado.mensaje ?? 'Error', 400);
+    return resultado.producto ?? resultado;
     }
 
     @Delete(':id')                     
