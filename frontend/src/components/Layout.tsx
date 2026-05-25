@@ -36,26 +36,32 @@ export default function Layout() {
         <div className={styles.headerRow}>
           <h1 className={styles.brand}>Tienda Central</h1>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger className={styles.branchTrigger}>
+          {employee?.es_gerente ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger className={styles.branchTrigger}>
+                <span>{branch?.nombre ?? 'Cargando sucursales...'}</span>
+                <ChevronDown className={styles.branchChevron} />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center">
+                {branches.map((b) => (
+                  <DropdownMenuItem
+                    key={b.id_sucursal}
+                    onClick={() => setBranch(b)}
+                    className={cn(
+                      'cursor-pointer',
+                      branch?.id_sucursal === b.id_sucursal && 'bg-accent'
+                    )}
+                  >
+                    {b.nombre}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <div className={styles.branchTrigger}>
               <span>{branch?.nombre ?? 'Cargando sucursales...'}</span>
-              <ChevronDown className={styles.branchChevron} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="center">
-              {branches.map((b) => (
-                <DropdownMenuItem
-                  key={b.id_sucursal}
-                  onClick={() => setBranch(b)}
-                  className={cn(
-                    'cursor-pointer',
-                    branch?.id_sucursal === b.id_sucursal && 'bg-accent'
-                  )}
-                >
-                  {b.nombre}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </div>
+          )}
 
           {employee && (
             <div className={styles.employeeArea}>
@@ -67,12 +73,14 @@ export default function Layout() {
                   {employee.nombre} {employee.apellido}
                 </span>
               </div>
-              <button
-                onClick={showCarnetOverlay}
-                className={styles.changeButton}
-              >
-                Cambiar
-              </button>
+              {employee.es_gerente ? (
+                <button
+                  onClick={showCarnetOverlay}
+                  className={styles.changeButton}
+                >
+                  Cambiar
+                </button>
+              ) : null}
             </div>
           )}
         </div>

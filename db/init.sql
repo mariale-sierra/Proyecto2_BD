@@ -1,32 +1,10 @@
--- CREAR TABLAS
+-- ==========================================
+-- ROLES DE POSTGRESQL
+-- ==========================================
+
 CREATE TABLE categoria (
     id_categoria SERIAL PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL
-);
-
-CREATE TABLE proveedor (
-    id_proveedor SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
-    telefono VARCHAR(20),
-    correo VARCHAR(100),
-    direccion TEXT
-);
-
-CREATE TABLE producto (
-    id_producto SERIAL PRIMARY KEY,
-    nombre VARCHAR(100) NOT NULL,
-    precio_venta DECIMAL(10,2) NOT NULL,
-    id_categoria INT NOT NULL,
-    FOREIGN KEY (id_categoria) REFERENCES categoria(id_categoria)
-);
-
-CREATE TABLE suministro (
-    id_producto INT,
-    id_proveedor INT,
-    precio_compra DECIMAL(10,2) NOT NULL,
-    PRIMARY KEY (id_producto, id_proveedor),
-    FOREIGN KEY (id_producto) REFERENCES producto(id_producto),
-    FOREIGN KEY (id_proveedor) REFERENCES proveedor(id_proveedor)
 );
 
 CREATE TABLE sucursal (
@@ -38,22 +16,44 @@ CREATE TABLE sucursal (
     hora_cierra TIME
 );
 
-CREATE TABLE empleado (
-    id_empleado SERIAL PRIMARY KEY,
-    nombre VARCHAR(100),
-    apellido VARCHAR(100),
-    es_gerente BOOLEAN,
-    salario DECIMAL(10,2),
-    id_sucursal INT,
-    FOREIGN KEY (id_sucursal) REFERENCES sucursal(id_sucursal)
+CREATE TABLE proveedor (
+    id_proveedor SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    telefono VARCHAR(20),
+    correo VARCHAR(100),
+    direccion TEXT
 );
 
 CREATE TABLE cliente (
     id_cliente SERIAL PRIMARY KEY,
-    nombre VARCHAR(100),
-    telefono VARCHAR(20),
+    nombre VARCHAR(100) NOT NULL,
+    telefono VARCHAR(20) NOT NULL,
     correo VARCHAR(100),
     nit VARCHAR(20)
+);
+
+CREATE TABLE empleado (
+    id_empleado SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    es_gerente BOOLEAN NOT NULL DEFAULT FALSE,
+    salario DECIMAL(10,2) NOT NULL,
+    id_sucursal INT,
+    CONSTRAINT fk_empleado_sucursal
+        FOREIGN KEY (id_sucursal)
+        REFERENCES sucursal (id_sucursal)
+        ON DELETE SET NULL
+);
+
+CREATE TABLE producto (
+    id_producto SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    precio_venta DECIMAL(10,2) NOT NULL,
+    id_categoria INT NOT NULL,
+    CONSTRAINT fk_producto_categoria
+        FOREIGN KEY (id_categoria)
+        REFERENCES categoria (id_categoria)
+        ON DELETE RESTRICT
 );
 
 CREATE TABLE venta (
@@ -63,29 +63,381 @@ CREATE TABLE venta (
     id_cliente INT,
     id_empleado INT,
     id_sucursal INT,
-    FOREIGN KEY (id_cliente) REFERENCES cliente(id_cliente),
-    FOREIGN KEY (id_empleado) REFERENCES empleado(id_empleado),
-    FOREIGN KEY (id_sucursal) REFERENCES sucursal(id_sucursal)
+    CONSTRAINT fk_venta_cliente
+        FOREIGN KEY (id_cliente)
+        REFERENCES cliente (id_cliente)
+        ON DELETE SET NULL,
+    CONSTRAINT fk_venta_empleado
+        FOREIGN KEY (id_empleado)
+        REFERENCES empleado (id_empleado)
+        ON DELETE SET NULL,
+    CONSTRAINT fk_venta_sucursal
+        FOREIGN KEY (id_sucursal)
+        REFERENCES sucursal (id_sucursal)
+        ON DELETE SET NULL
+);
+
+CREATE TABLE suministro (
+    id_producto INT NOT NULL,
+    id_proveedor INT NOT NULL,
+    precio_compra DECIMAL(10,2) NOT NULL,
+    PRIMARY KEY (id_producto, id_proveedor),
+    CONSTRAINT fk_suministro_producto
+        FOREIGN KEY (id_producto)
+        REFERENCES producto (id_producto)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_suministro_proveedor
+        FOREIGN KEY (id_proveedor)
+        REFERENCES proveedor (id_proveedor)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE detalle_venta (
-    id_venta INT,
-    id_producto INT,
+    id_venta INT NOT NULL,
+    id_producto INT NOT NULL,
     cantidad INT NOT NULL,
-    precio_unitario DECIMAL(10,2),
+    precio_unitario DECIMAL(10,2) NOT NULL,
     PRIMARY KEY (id_venta, id_producto),
-    FOREIGN KEY (id_venta) REFERENCES venta(id_venta),
-    FOREIGN KEY (id_producto) REFERENCES producto(id_producto)
+    CONSTRAINT fk_detalle_venta_venta
+        FOREIGN KEY (id_venta)
+        REFERENCES venta (id_venta)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_detalle_venta_producto
+        FOREIGN KEY (id_producto)
+        REFERENCES producto (id_producto)
+        ON DELETE RESTRICT
 );
 
 CREATE TABLE stock_sucursal (
-    id_producto INT,
-    id_sucursal INT,
-    cantidad INT NOT NULL,
+    id_producto INT NOT NULL,
+    id_sucursal INT NOT NULL,
+    cantidad INT NOT NULL DEFAULT 0,
     PRIMARY KEY (id_producto, id_sucursal),
-    FOREIGN KEY (id_producto) REFERENCES producto(id_producto),
-    FOREIGN KEY (id_sucursal) REFERENCES sucursal(id_sucursal)
+    CONSTRAINT fk_stock_producto
+        FOREIGN KEY (id_producto)
+        REFERENCES producto (id_producto)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_stock_sucursal
+        FOREIGN KEY (id_sucursal)
+        REFERENCES sucursal (id_sucursal)
+        ON DELETE CASCADE
 );
+
+CREATE ROLE dueno;
+CREATE ROLE gerente_sucursal;
+CREATE ROLE vendedor;
+CREATE ROLE contador;
+CREATE ROLE bodeguero;
+
+-- dueno: acceso total
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dueno;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dueno;
+
+-- gerente_sucursal: administra su sucursal
+GRANT SELECT, INSERT, UPDATE ON venta, detalle_venta, stock_sucursal TO gerente_sucursal;
+GRANT SELECT ON producto, categoria, cliente, empleado, sucursal, proveedor, suministro TO gerente_sucursal;
+
+-- vendedor: solo registrar ventas y consultar
+GRANT SELECT ON producto, categoria, cliente, sucursal, stock_sucursal TO vendedor;
+GRANT SELECT, INSERT ON venta, detalle_venta TO vendedor;
+GRANT UPDATE ON stock_sucursal TO vendedor;
+
+-- contador: solo lectura para reportes
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO contador;
+
+-- bodeguero: maneja stock y proveedores
+GRANT SELECT, UPDATE ON stock_sucursal TO bodeguero;
+GRANT SELECT ON producto, proveedor, suministro TO bodeguero;
+GRANT INSERT ON suministro TO bodeguero;
+
+-- ==========================================
+-- VISTAS
+-- ==========================================
+
+CREATE VIEW vista_venta_detalle AS
+SELECT v.id_venta, v.fecha, v.total,
+       c.nombre AS cliente,
+       e.nombre || ' ' || e.apellido AS empleado,
+       s.nombre AS sucursal,
+       p.nombre AS producto,
+       dv.cantidad,
+       dv.precio_unitario,
+       (dv.cantidad * dv.precio_unitario) AS subtotal
+FROM venta v
+JOIN cliente c      ON v.id_cliente  = c.id_cliente
+JOIN empleado e     ON v.id_empleado = e.id_empleado
+JOIN sucursal s     ON v.id_sucursal = s.id_sucursal
+JOIN detalle_venta dv ON v.id_venta  = dv.id_venta
+JOIN producto p     ON dv.id_producto = p.id_producto;
+
+CREATE VIEW vista_stock_sucursal AS
+SELECT p.id_producto, p.nombre AS producto,
+       c.nombre AS categoria,
+       s.id_sucursal, s.nombre AS sucursal,
+       ss.cantidad,
+       CASE
+           WHEN ss.cantidad = 0 THEN 'sin_stock'
+           WHEN ss.cantidad < 5 THEN 'bajo'
+           ELSE 'ok'
+       END AS nivel_stock
+FROM producto p
+JOIN categoria c ON p.id_categoria = c.id_categoria
+JOIN stock_sucursal ss ON p.id_producto = ss.id_producto
+JOIN sucursal s ON ss.id_sucursal = s.id_sucursal;
+
+CREATE VIEW vista_productos_reorden AS
+SELECT p.id_producto, p.nombre AS producto,
+       ss.id_sucursal, s.nombre AS sucursal,
+       ss.cantidad AS stock_actual,
+       pr.id_proveedor, pr.nombre AS proveedor,
+       pr.correo AS correo_proveedor,
+       su.precio_compra
+FROM producto p
+JOIN stock_sucursal ss ON p.id_producto = ss.id_producto
+JOIN sucursal s ON ss.id_sucursal = s.id_sucursal
+JOIN suministro su ON p.id_producto = su.id_producto
+JOIN proveedor pr ON su.id_proveedor = pr.id_proveedor
+WHERE ss.cantidad < 5;
+
+-- ==========================================
+-- SP 1: registrar_venta (con transaccion y validaciones)
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION registrar_venta(
+    p_id_cliente  INT,
+    p_id_empleado INT,
+    p_items       JSONB,
+    p_id_sucursal INT
+)
+RETURNS INT AS $$
+DECLARE
+    v_id_venta     INT;
+    v_id_sucursal  INT;
+    v_total        DECIMAL(10,2) := 0;
+    v_item         JSONB;
+    v_stock_actual INT;
+    v_id_producto  INT;
+    v_cantidad     INT;
+    v_precio       DECIMAL(10,2);
+BEGIN
+    -- validar empleado y obtener su sucursal
+    SELECT id_sucursal INTO v_id_sucursal
+    FROM empleado WHERE id_empleado = p_id_empleado;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Empleado no encontrado';
+    END IF;
+
+    IF v_id_sucursal IS DISTINCT FROM p_id_sucursal THEN
+        RAISE EXCEPTION 'El empleado no pertenece a la sucursal seleccionada';
+    END IF;
+
+    -- validar cliente
+    IF NOT EXISTS (SELECT 1 FROM cliente WHERE id_cliente = p_id_cliente) THEN
+        RAISE EXCEPTION 'Cliente no encontrado';
+    END IF;
+
+    -- validar stock de todos los productos antes de insertar nada
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+        v_id_producto := (v_item->>'id_producto')::INT;
+        v_cantidad    := (v_item->>'cantidad')::INT;
+
+        IF NOT EXISTS (SELECT 1 FROM producto WHERE id_producto = v_id_producto) THEN
+            RAISE EXCEPTION 'Producto % no existe', v_id_producto;
+        END IF;
+
+        SELECT cantidad INTO v_stock_actual
+        FROM stock_sucursal
+        WHERE id_producto = v_id_producto AND id_sucursal = v_id_sucursal;
+
+        IF NOT FOUND OR v_stock_actual < v_cantidad THEN
+            RAISE EXCEPTION 'Stock insuficiente para el producto %', v_id_producto;
+        END IF;
+    END LOOP;
+
+    -- calcular total
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+        v_total := v_total +
+            (v_item->>'precio_unitario')::DECIMAL *
+            (v_item->>'cantidad')::INT;
+    END LOOP;
+
+    -- insertar venta
+    INSERT INTO venta (fecha, total, id_cliente, id_empleado, id_sucursal)
+    VALUES (CURRENT_DATE, v_total, p_id_cliente, p_id_empleado, v_id_sucursal)
+    RETURNING id_venta INTO v_id_venta;
+
+    -- insertar detalles y descontar stock
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+        v_id_producto := (v_item->>'id_producto')::INT;
+        v_cantidad    := (v_item->>'cantidad')::INT;
+        v_precio      := (v_item->>'precio_unitario')::DECIMAL;
+
+        INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario)
+        VALUES (v_id_venta, v_id_producto, v_cantidad, v_precio);
+
+        UPDATE stock_sucursal
+        SET cantidad = cantidad - v_cantidad
+        WHERE id_producto = v_id_producto AND id_sucursal = v_id_sucursal;
+    END LOOP;
+
+    RETURN v_id_venta;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE; -- rollback automatico + propaga el error al backend
+END;
+$$ LANGUAGE plpgsql;
+
+-- ==========================================
+-- SP 2: reabastecer_stock (para bodeguero)
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION reabastecer_stock(
+    p_id_producto  INT,
+    p_id_sucursal  INT,
+    p_cantidad     INT
+)
+RETURNS VOID AS $$
+BEGIN
+    -- validar que el producto existe
+    IF NOT EXISTS (SELECT 1 FROM producto WHERE id_producto = p_id_producto) THEN
+        RAISE EXCEPTION 'Producto no encontrado';
+    END IF;
+
+    -- validar que la sucursal existe
+    IF NOT EXISTS (SELECT 1 FROM sucursal WHERE id_sucursal = p_id_sucursal) THEN
+        RAISE EXCEPTION 'Sucursal no encontrada';
+    END IF;
+
+    -- validar cantidad positiva
+    IF p_cantidad <= 0 THEN
+        RAISE EXCEPTION 'La cantidad debe ser mayor a 0';
+    END IF;
+
+    -- si ya existe el registro, sumar; si no, insertar
+    INSERT INTO stock_sucursal (id_producto, id_sucursal, cantidad)
+    VALUES (p_id_producto, p_id_sucursal, p_cantidad)
+    ON CONFLICT (id_producto, id_sucursal)
+    DO UPDATE SET cantidad = stock_sucursal.cantidad + p_cantidad;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ==========================================
+-- SP 3: generar_factura (con OUT params)
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION generar_factura(
+    p_id_venta        INT,
+    OUT numero_factura VARCHAR(20),
+    OUT cliente_nombre VARCHAR(100),
+    OUT empleado_nombre VARCHAR(200),
+    OUT sucursal_nombre VARCHAR(100),
+    OUT fecha_venta    DATE,
+    OUT total          DECIMAL(10,2)
+)
+AS $$
+BEGIN
+    SELECT
+        'FAC-' || LPAD(v.id_venta::TEXT, 6, '0'),
+        c.nombre,
+        e.nombre || ' ' || e.apellido,
+        s.nombre,
+        v.fecha,
+        v.total
+    INTO
+        numero_factura,
+        cliente_nombre,
+        empleado_nombre,
+        sucursal_nombre,
+        fecha_venta,
+        total
+    FROM venta v
+    JOIN cliente c  ON v.id_cliente  = c.id_cliente
+    JOIN empleado e ON v.id_empleado = e.id_empleado
+    JOIN sucursal s ON v.id_sucursal = s.id_sucursal
+    WHERE v.id_venta = p_id_venta;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Venta % no encontrada', p_id_venta;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ==========================================
+-- SP 4: actualizar_precio_producto
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION actualizar_precio_producto(
+    p_id_producto  INT,
+    p_precio_nuevo DECIMAL(10,2)
+)
+RETURNS VOID AS $$
+BEGIN
+    -- validar que el producto existe
+    IF NOT EXISTS (SELECT 1 FROM producto WHERE id_producto = p_id_producto) THEN
+        RAISE EXCEPTION 'Producto no encontrado';
+    END IF;
+
+    -- validar precio positivo
+    IF p_precio_nuevo <= 0 THEN
+        RAISE EXCEPTION 'El precio debe ser mayor a 0';
+    END IF;
+
+    UPDATE producto
+    SET precio_venta = p_precio_nuevo
+    WHERE id_producto = p_id_producto;
+
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ==========================================
+-- SP 5: reporte_ventas (por sucursal y fechas)
+-- ==========================================
+
+CREATE OR REPLACE FUNCTION reporte_ventas(
+    p_id_sucursal  INT DEFAULT NULL,
+    p_fecha_inicio DATE DEFAULT NULL,
+    p_fecha_fin    DATE DEFAULT NULL
+)
+RETURNS TABLE (
+    sucursal       VARCHAR,
+    empleado       TEXT,
+    total_ventas   BIGINT,
+    ingresos       DECIMAL,
+    ticket_promedio DECIMAL,
+    fecha          DATE
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        s.nombre::VARCHAR         AS sucursal,
+        (e.nombre || ' ' || e.apellido)::TEXT AS empleado,
+        COUNT(v.id_venta)         AS total_ventas,
+        SUM(v.total)              AS ingresos,
+        AVG(v.total)              AS ticket_promedio,
+        v.fecha                   AS fecha
+    FROM venta v
+    JOIN empleado e ON v.id_empleado = e.id_empleado
+    JOIN sucursal s ON v.id_sucursal = s.id_sucursal
+    WHERE
+        (p_id_sucursal IS NULL OR v.id_sucursal = p_id_sucursal)
+        AND (p_fecha_inicio IS NULL OR v.fecha >= p_fecha_inicio)
+        AND (p_fecha_fin    IS NULL OR v.fecha <= p_fecha_fin)
+    GROUP BY s.nombre, e.nombre, e.apellido, v.fecha
+    ORDER BY v.fecha DESC, ingresos DESC;
+END;
+$$ LANGUAGE plpgsql;
 
 -- INSERTAR DATOS
 
@@ -246,31 +598,36 @@ INSERT INTO suministro VALUES
 (25, 9,  3.50);
 
 INSERT INTO stock_sucursal VALUES
-(1,  1, 50),
-(2,  1, 40),
-(3,  1, 80),
-(4,  1,  3),
-(5,  1, 15),
-(6,  2, 60),
-(7,  2, 45),
-(8,  2,  2),
-(9,  2, 100),
-(10, 2, 20),
-(11, 3, 35),
-(12, 3,  4),
-(13, 3, 25),
-(14, 3, 30),
-(15, 3,  0),
-(16, 4, 70),
-(17, 4, 55),
-(18, 4, 40),
-(19, 4,  3),
-(20, 4, 90),
-(21, 5, 60),
-(22, 5, 45),
-(23, 5, 10),
-(24, 5, 20),
-(25, 5, 35);
+-- sucursal 1
+(1,  1, 50), (2,  1, 40), (3,  1, 80), (4,  1,  3), (5,  1, 15),
+(6,  1, 60), (7,  1, 45), (8,  1, 25), (9,  1, 100),(10, 1, 20),
+(11, 1, 35), (12, 1,  4), (13, 1, 25), (14, 1, 30), (15, 1,  0),
+(16, 1, 70), (17, 1, 55), (18, 1, 40), (19, 1,  3), (20, 1, 90),
+(21, 1, 60), (22, 1, 45), (23, 1, 10), (24, 1, 20), (25, 1, 35),
+-- sucursal 2
+(1,  2, 30), (2,  2, 25), (3,  2, 50), (4,  2, 10), (5,  2, 8),
+(6,  2, 60), (7,  2, 45), (8,  2,  2), (9,  2,100), (10, 2, 20),
+(11, 2, 20), (12, 2, 15), (13, 2, 10), (14, 2, 12), (15, 2,  5),
+(16, 2, 30), (17, 2, 20), (18, 2, 15), (19, 2,  8), (20, 2, 40),
+(21, 2, 25), (22, 2, 30), (23, 2,  5), (24, 2, 10), (25, 2, 20),
+-- sucursal 3
+(1,  3, 20), (2,  3, 15), (3,  3, 40), (4,  3,  5), (5,  3, 10),
+(6,  3, 35), (7,  3, 30), (8,  3, 20), (9,  3, 60), (10, 3, 15),
+(11, 3, 35), (12, 3,  4), (13, 3, 25), (14, 3, 30), (15, 3,  0),
+(16, 3, 20), (17, 3, 25), (18, 3, 10), (19, 3,  2), (20, 3, 50),
+(21, 3, 30), (22, 3, 20), (23, 3,  8), (24, 3, 15), (25, 3, 25),
+-- sucursal 4
+(1,  4, 25), (2,  4, 20), (3,  4, 60), (4,  4,  8), (5,  4, 12),
+(6,  4, 45), (7,  4, 35), (8,  4, 15), (9,  4, 80), (10, 4, 10),
+(11, 4, 20), (12, 4, 10), (13, 4, 15), (14, 4, 20), (15, 4,  3),
+(16, 4, 70), (17, 4, 55), (18, 4, 40), (19, 4,  3), (20, 4, 90),
+(21, 4, 40), (22, 4, 35), (23, 4,  6), (24, 4, 12), (25, 4, 30),
+-- sucursal 5
+(1,  5, 15), (2,  5, 10), (3,  5, 30), (4,  5,  4), (5,  5,  6),
+(6,  5, 25), (7,  5, 20), (8,  5, 10), (9,  5, 50), (10, 5,  8),
+(11, 5, 15), (12, 5,  8), (13, 5, 12), (14, 5, 15), (15, 5,  2),
+(16, 5, 30), (17, 5, 25), (18, 5, 20), (19, 5,  1), (20, 5, 45),
+(21, 5, 60), (22, 5, 45), (23, 5, 10), (24, 5, 20), (25, 5, 35);
 
 
 INSERT INTO venta (fecha, total, id_cliente, id_empleado, id_sucursal) VALUES
