@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { empleadosApi } from '@/services/api/empleados.api'
-import type { AuthEmployee } from '@/src/App'
+import { authApi } from '@/services/api/auth.api'
+import type { AuthUser } from '@/src/auth/roles'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import styles from './CarnetOverlay.module.scss'
 
 interface CarnetOverlayProps {
   isOpen: boolean
-  onAuthenticate: (employee: AuthEmployee) => void
+  onAuthenticate: (employee: AuthUser) => void
 }
 
 export function CarnetOverlay({ isOpen, onAuthenticate }: CarnetOverlayProps) {
@@ -27,15 +27,15 @@ export function CarnetOverlay({ isOpen, onAuthenticate }: CarnetOverlayProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    const carnetNumber = Number(carnet)
-    if (!Number.isFinite(carnetNumber)) {
-      setError('Ingresa un carnet valido.')
+    const credential = carnet.trim()
+    if (!credential) {
+      setError('Ingresa un carnet o usuario valido.')
       return
     }
 
     try {
       setLoading(true)
-      const employee = await empleadosApi.findByCarnet(carnetNumber) as AuthEmployee
+      const employee = await authApi.login(credential)
       setError('')
       setCarnet('')
       onAuthenticate(employee)
@@ -52,7 +52,7 @@ export function CarnetOverlay({ isOpen, onAuthenticate }: CarnetOverlayProps) {
     <div className={styles.overlay}>
       <div className={styles.panel}>
         <h2 className={styles.title}>
-          Ingresa tu carnet para comenzar
+          Inicia sesión para comenzar
         </h2>
         <p className={styles.subtitle}>
           Escribe tu número de carnet de empleado
@@ -63,14 +63,13 @@ export function CarnetOverlay({ isOpen, onAuthenticate }: CarnetOverlayProps) {
             <Input
               ref={inputRef}
               type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
+              inputMode="text"
               value={carnet}
               onChange={(e) => {
                 setCarnet(e.target.value)
                 setError('')
               }}
-              placeholder="Ej: 1001"
+              placeholder="Ej: 1001 o dueno123"
               className={error ? styles.inputError : ''}
               autoComplete="off"
             />

@@ -13,6 +13,7 @@ import { VentaModule } from './venta/venta.module';
 import { ProveedorModule } from './proveedor/proveedor.module';
 import { CategoriaModule } from './categoria/categoria.module';
 import { DatabaseModule } from './database.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { DatabaseModule } from './database.module';
     VentaModule,
     ProveedorModule,
     CategoriaModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

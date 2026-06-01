@@ -16,6 +16,9 @@ export class Empleado {
   @Column({ type: 'boolean', name: 'es_gerente', default: false })
   es_gerente!: boolean;
 
+  @Column({ type: 'varchar', length: 50, name: 'rol', default: 'vendedor' })
+  rol!: string;
+
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   salario!: number;
 

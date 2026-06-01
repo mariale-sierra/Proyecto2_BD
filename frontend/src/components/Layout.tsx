@@ -9,23 +9,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-
-const baseTabs = [
-  { name: 'Nueva venta', path: '/nueva-venta' },
-  { name: 'Clientes', path: '/clientes' },
-  { name: 'Inventario', path: '/inventario' },
-  { name: 'Reportes', path: '/reportes' },
-]
-
-const managerTabs = [
-  ...baseTabs,
-  { name: 'Proveedores', path: '/proveedores' },
-]
+import { canSwitchBranch, getRoleLabel, getTabsForRole } from '@/src/auth/roles'
 
 export default function Layout() {
-  const { employee, branch, branches, setBranch, showCarnetOverlay } = useApp()
+  const { employee, branch, branches, setBranch, logout } = useApp()
 
-  const tabs = employee?.es_gerente ? managerTabs : baseTabs
+  const tabs = getTabsForRole(employee?.role)
+  const visibleBranches = employee?.role === 'dueno'
+    ? branches
+    : employee
+      ? branches.filter((b) => b.id_sucursal === employee.id_sucursal)
+      : []
   const employeeInitials = employee
     ? `${employee.nombre[0] ?? ''}${employee.apellido[0] ?? ''}`.toUpperCase()
     : ''
@@ -36,14 +30,14 @@ export default function Layout() {
         <div className={styles.headerRow}>
           <h1 className={styles.brand}>Tienda Central</h1>
 
-          {employee?.es_gerente ? (
+          {canSwitchBranch(employee?.role) ? (
             <DropdownMenu>
               <DropdownMenuTrigger className={styles.branchTrigger}>
                 <span>{branch?.nombre ?? 'Cargando sucursales...'}</span>
                 <ChevronDown className={styles.branchChevron} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center">
-                {branches.map((b) => (
+                {visibleBranches.map((b) => (
                   <DropdownMenuItem
                     key={b.id_sucursal}
                     onClick={() => setBranch(b)}
@@ -73,14 +67,18 @@ export default function Layout() {
                   {employee.nombre} {employee.apellido}
                 </span>
               </div>
-              {employee.es_gerente ? (
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
+                  {getRoleLabel(employee.role)}
+                </span>
                 <button
-                  onClick={showCarnetOverlay}
+                  onClick={logout}
                   className={styles.changeButton}
+                  type="button"
                 >
-                  Cambiar
+                  Cerrar sesión
                 </button>
-              ) : null}
+              </div>
             </div>
           )}
         </div>

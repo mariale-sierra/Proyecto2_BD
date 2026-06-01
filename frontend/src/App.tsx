@@ -7,18 +7,12 @@ import Inventario from './pages/Inventario'
 import Reportes from './pages/Reportes'
 import Proveedores from './pages/Proveedores'
 import { CarnetOverlay } from './components/CarnetOverlay'
+import { RoleRoute, HomeRedirect } from './components/RoleRoute'
 import { Toast, type ToastState } from './components/Toast'
 import { sucursalesApi } from '@/services/api/sucursales.api'
-
-export interface AuthEmployee {
-  id_empleado: number
-  nombre: string
-  apellido: string
-  es_gerente: boolean
-  salario: number
-  id_sucursal: number
-  nombre_sucursal?: string
-}
+import { authApi } from '@/services/api/auth.api'
+import type { AuthUser } from '@/src/auth/roles'
+import { getDefaultRoute } from '@/src/auth/roles'
 
 export interface BranchOption {
   id_sucursal: number
@@ -26,11 +20,12 @@ export interface BranchOption {
 }
 
 interface AppContextType {
-  employee: AuthEmployee | null
+  employee: AuthUser | null
   branch: BranchOption | null
   branches: BranchOption[]
   setBranch: (branch: BranchOption) => void
-  showCarnetOverlay: () => void
+  logout: () => Promise<void>
+  authReady: boolean
   showToast: (toast: ToastState) => void
 }
 
@@ -43,20 +38,18 @@ export function useApp() {
 }
 
 export default function App() {
-  const [employee, setEmployee] = useState<AuthEmployee | null>(null)
+  const [employee, setEmployee] = useState<AuthUser | null>(null)
   const [branch, setBranch] = useState<BranchOption | null>(null)
   const [branches, setBranches] = useState<BranchOption[]>([])
   const [carnetOverlayOpen, setCarnetOverlayOpen] = useState(true)
   const [toast, setToast] = useState<ToastState | null>(null)
+  const [authReady, setAuthReady] = useState(false)
 
   useEffect(() => {
     const loadBranches = async () => {
       try {
         const data = await sucursalesApi.findAll() as BranchOption[]
         setBranches(data)
-        if (!branch && data.length > 0) {
-          setBranch(data[0])
-        }
       } catch {
         setToast({ message: 'No se pudieron cargar las sucursales', type: 'error' })
       }
@@ -65,10 +58,40 @@ export default function App() {
     void loadBranches()
   }, [])
 
-  const showCarnetOverlay = () => setCarnetOverlayOpen(true)
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const session = await authApi.me()
+        setEmployee(session)
+        setCarnetOverlayOpen(false)
+      } catch {
+        setEmployee(null)
+        setCarnetOverlayOpen(true)
+      } finally {
+        setAuthReady(true)
+      }
+    }
+
+    void restoreSession()
+  }, [])
+
+  useEffect(() => {
+    if (branches.length === 0) return
+
+    if (employee) {
+      const employeeBranch = branches.find((b) => b.id_sucursal === employee.id_sucursal)
+      setBranch(employeeBranch ?? branches[0])
+      return
+    }
+
+    if (!branch) {
+      setBranch(branches[0])
+    }
+  }, [branches, employee?.id_sucursal, employee?.role])
+
   const showToast = (newToast: ToastState) => setToast(newToast)
 
-  const handleAuthenticate = (authenticatedEmployee: AuthEmployee) => {
+  const handleAuthenticate = (authenticatedEmployee: AuthUser) => {
     setEmployee(authenticatedEmployee)
     const employeeBranch = branches.find(
       (b) => b.id_sucursal === authenticatedEmployee.id_sucursal
@@ -79,23 +102,77 @@ export default function App() {
     setCarnetOverlayOpen(false)
   }
 
+  const logout = async () => {
+    try {
+      await authApi.logout()
+    } finally {
+      setEmployee(null)
+      setCarnetOverlayOpen(true)
+      if (branches.length > 0) {
+        setBranch(branches[0])
+      }
+    }
+  }
+
+  if (!authReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Restaurando sesión...</p>
+      </div>
+    )
+  }
+
   return (
-    <AppContext.Provider value={{ employee, branch, branches, setBranch, showCarnetOverlay, showToast }}>
+    <AppContext.Provider value={{ employee, branch, branches, setBranch, logout, authReady, showToast }}>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Navigate to="/nueva-venta" replace />} />
-          <Route path="nueva-venta" element={<NuevaVenta />} />
-          <Route path="clientes" element={<Clientes />} />
-          <Route path="inventario" element={<Inventario />} />
-          <Route path="reportes" element={<Reportes />} />
-          {employee && employee.es_gerente && (
-            <Route path="proveedores" element={<Proveedores />} />
-          )}
+          <Route index element={<HomeRedirect />} />
+          <Route
+            path="nueva-venta"
+            element={(
+              <RoleRoute allowedRoles={['dueno', 'gerente_sucursal', 'vendedor']}>
+                <NuevaVenta />
+              </RoleRoute>
+            )}
+          />
+          <Route
+            path="clientes"
+            element={(
+              <RoleRoute allowedRoles={['dueno', 'gerente_sucursal', 'vendedor']}>
+                <Clientes />
+              </RoleRoute>
+            )}
+          />
+          <Route
+            path="inventario"
+            element={(
+              <RoleRoute allowedRoles={['dueno', 'gerente_sucursal', 'vendedor', 'bodeguero']}>
+                <Inventario />
+              </RoleRoute>
+            )}
+          />
+          <Route
+            path="reportes"
+            element={(
+              <RoleRoute allowedRoles={['dueno', 'gerente_sucursal', 'contador']}>
+                <Reportes />
+              </RoleRoute>
+            )}
+          />
+          <Route
+            path="proveedores"
+            element={(
+              <RoleRoute allowedRoles={['dueno', 'gerente_sucursal', 'bodeguero']}>
+                <Proveedores />
+              </RoleRoute>
+            )}
+          />
+          <Route path="*" element={<Navigate to={getDefaultRoute(employee?.role)} replace />} />
         </Route>
       </Routes>
       
       <CarnetOverlay
-        isOpen={carnetOverlayOpen}
+        isOpen={carnetOverlayOpen && !employee}
         onAuthenticate={handleAuthenticate}
       />
       

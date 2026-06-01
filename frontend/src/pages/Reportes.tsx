@@ -3,6 +3,7 @@ import { DollarSign, ShoppingCart, Receipt } from 'lucide-react'
 import { empleadosApi } from '@/services/api/empleados.api'
 import { productosApi } from '@/services/api/productos.api'
 import { useApp } from '@/src/App'
+import { getRoleLabel, type AppRole } from '@/src/auth/roles'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -25,7 +26,7 @@ interface EmployeeRow {
   id_empleado: number
   nombre: string
   apellido: string
-  es_gerente: boolean
+  role: AppRole
   salario: number
   nombre_sucursal?: string
 }
@@ -207,7 +208,7 @@ export default function Reportes() {
                         {employee.nombre} {employee.apellido}
                       </TableCell>
                       <TableCell className="text-right">
-                        {employee.es_gerente ? 'Gerente' : 'Empleado'}
+                        {getRoleLabel(employee.role)}
                       </TableCell>
                       <TableCell className="text-right">
                         {formatCurrency(Number(employee.salario))}

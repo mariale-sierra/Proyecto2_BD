@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react'
 import { productosApi } from '@/services/api/productos.api'
 import { proveedoresApi } from '@/services/api/proveedores.api'
 import { useApp } from '@/src/App'
+import { getRoleLabel } from '@/src/auth/roles'
 import { Modal } from '@/src/components/Modal'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -116,8 +117,6 @@ export default function Proveedores() {
       type: 'success',
     })
   }
-
-  const employeeRole = employee?.es_gerente ? 'gerente' : 'empleado'
 
   return (
     <>
@@ -280,7 +279,7 @@ export default function Proveedores() {
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Realizado por:</span>
               <span className="font-medium">
-                {employee?.nombre} {employee?.apellido} ({employeeRole})
+                {employee?.nombre} {employee?.apellido} ({getRoleLabel(employee?.role)})
               </span>
             </div>
           </div>

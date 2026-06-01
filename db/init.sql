@@ -37,6 +37,7 @@ CREATE TABLE empleado (
     nombre VARCHAR(100) NOT NULL,
     apellido VARCHAR(100) NOT NULL,
     es_gerente BOOLEAN NOT NULL DEFAULT FALSE,
+    rol VARCHAR(50) NOT NULL DEFAULT 'vendedor',
     salario DECIMAL(10,2) NOT NULL,
     id_sucursal INT,
     CONSTRAINT fk_empleado_sucursal
@@ -123,32 +124,60 @@ CREATE TABLE stock_sucursal (
         ON DELETE CASCADE
 );
 
-CREATE ROLE dueno;
-CREATE ROLE gerente_sucursal;
-CREATE ROLE vendedor;
-CREATE ROLE contador;
-CREATE ROLE bodeguero;
+ALTER TABLE empleado
+    ADD COLUMN IF NOT EXISTS rol VARCHAR(50) NOT NULL DEFAULT 'vendedor';
 
--- dueno: acceso total
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dueno;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dueno;
+    REVOKE ALL ON SCHEMA public FROM PUBLIC;
+    REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+    REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
 
--- gerente_sucursal: administra su sucursal
-GRANT SELECT, INSERT, UPDATE ON venta, detalle_venta, stock_sucursal TO gerente_sucursal;
-GRANT SELECT ON producto, categoria, cliente, empleado, sucursal, proveedor, suministro TO gerente_sucursal;
+    CREATE ROLE dueno;
+    CREATE ROLE gerente_sucursal;
+    CREATE ROLE vendedor;
+    CREATE ROLE contador;
+    CREATE ROLE bodeguero;
 
--- vendedor: solo registrar ventas y consultar
-GRANT SELECT ON producto, categoria, cliente, sucursal, stock_sucursal TO vendedor;
-GRANT SELECT, INSERT ON venta, detalle_venta TO vendedor;
-GRANT UPDATE ON stock_sucursal TO vendedor;
+    -- dueno: acceso total a todas las tablas y secuencias.
+    -- gerente_sucursal: venta, detalle_venta, stock_sucursal (SELECT/INSERT/UPDATE); consulta de catalogos y empleados.
+    -- vendedor: consulta catalogos y stock; crea ventas y detalle_venta; actualiza stock_sucursal.
+    -- contador: lectura total para reportes.
+    -- bodeguero: consulta producto/proveedor/suministro; actualiza stock_sucursal; inserta en suministro.
 
--- contador: solo lectura para reportes
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO contador;
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dueno;
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dueno;
 
--- bodeguero: maneja stock y proveedores
-GRANT SELECT, UPDATE ON stock_sucursal TO bodeguero;
-GRANT SELECT ON producto, proveedor, suministro TO bodeguero;
-GRANT INSERT ON suministro TO bodeguero;
+    GRANT SELECT, INSERT, UPDATE ON venta, detalle_venta, stock_sucursal TO gerente_sucursal;
+    GRANT SELECT ON producto, categoria, cliente, empleado, sucursal, proveedor, suministro TO gerente_sucursal;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO gerente_sucursal;
+
+    GRANT SELECT ON producto, categoria, cliente, sucursal, stock_sucursal TO vendedor;
+    GRANT SELECT, INSERT ON venta, detalle_venta TO vendedor;
+    GRANT UPDATE ON stock_sucursal TO vendedor;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO vendedor;
+
+    GRANT SELECT ON ALL TABLES IN SCHEMA public TO contador;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO contador;
+
+    GRANT SELECT, UPDATE ON stock_sucursal TO bodeguero;
+    GRANT SELECT ON producto, proveedor, suministro TO bodeguero;
+    GRANT INSERT ON suministro TO bodeguero;
+    GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO bodeguero;
+
+    -- Usuarios de prueba funcionales por rol.
+    CREATE ROLE usuario_dueno LOGIN PASSWORD 'dueno123';
+    GRANT dueno TO usuario_dueno;
+
+    CREATE ROLE usuario_gerente LOGIN PASSWORD 'gerente123';
+    GRANT gerente_sucursal TO usuario_gerente;
+
+    CREATE ROLE usuario_vendedor LOGIN PASSWORD 'vendedor123';
+    GRANT vendedor TO usuario_vendedor;
+
+    CREATE ROLE usuario_contador LOGIN PASSWORD 'contador123';
+    GRANT contador TO usuario_contador;
+
+    CREATE ROLE usuario_bodeguero LOGIN PASSWORD 'bodeguero123';
+    GRANT bodeguero TO usuario_bodeguero;
 
 -- ==========================================
 -- VISTAS
@@ -200,18 +229,19 @@ JOIN proveedor pr ON su.id_proveedor = pr.id_proveedor
 WHERE ss.cantidad < 5;
 
 -- ==========================================
--- SP 1: registrar_venta (con transaccion y validaciones)
+-- PROCEDIMIENTOS ALMACENADOS
 -- ==========================================
 
-CREATE OR REPLACE FUNCTION registrar_venta(
-    p_id_cliente  INT,
-    p_id_empleado INT,
-    p_items       JSONB,
-    p_id_sucursal INT
+CREATE OR REPLACE PROCEDURE registrar_venta(
+    IN p_id_cliente  INT,
+    IN p_id_empleado INT,
+    IN p_items       JSONB,
+    IN p_id_sucursal INT,
+    OUT id_venta     INT
 )
-RETURNS INT AS $$
+LANGUAGE plpgsql
+AS $$
 DECLARE
-    v_id_venta     INT;
     v_id_sucursal  INT;
     v_total        DECIMAL(10,2) := 0;
     v_item         JSONB;
@@ -220,9 +250,9 @@ DECLARE
     v_cantidad     INT;
     v_precio       DECIMAL(10,2);
 BEGIN
-    -- validar empleado y obtener su sucursal
-    SELECT id_sucursal INTO v_id_sucursal
-    FROM empleado WHERE id_empleado = p_id_empleado;
+    SELECT e.id_sucursal INTO v_id_sucursal
+    FROM empleado e
+    WHERE e.id_empleado = p_id_empleado;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Empleado no encontrado';
@@ -232,16 +262,14 @@ BEGIN
         RAISE EXCEPTION 'El empleado no pertenece a la sucursal seleccionada';
     END IF;
 
-    -- validar cliente
     IF NOT EXISTS (SELECT 1 FROM cliente WHERE id_cliente = p_id_cliente) THEN
         RAISE EXCEPTION 'Cliente no encontrado';
     END IF;
 
-    -- validar stock de todos los productos antes de insertar nada
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
         v_id_producto := (v_item->>'id_producto')::INT;
-        v_cantidad    := (v_item->>'cantidad')::INT;
+        v_cantidad := (v_item->>'cantidad')::INT;
 
         IF NOT EXISTS (SELECT 1 FROM producto WHERE id_producto = v_id_producto) THEN
             RAISE EXCEPTION 'Producto % no existe', v_id_producto;
@@ -256,7 +284,6 @@ BEGIN
         END IF;
     END LOOP;
 
-    -- calcular total
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
         v_total := v_total +
@@ -264,61 +291,51 @@ BEGIN
             (v_item->>'cantidad')::INT;
     END LOOP;
 
-    -- insertar venta
     INSERT INTO venta (fecha, total, id_cliente, id_empleado, id_sucursal)
     VALUES (CURRENT_DATE, v_total, p_id_cliente, p_id_empleado, v_id_sucursal)
-    RETURNING id_venta INTO v_id_venta;
+    RETURNING venta.id_venta INTO id_venta;
 
-    -- insertar detalles y descontar stock
     FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
     LOOP
         v_id_producto := (v_item->>'id_producto')::INT;
-        v_cantidad    := (v_item->>'cantidad')::INT;
-        v_precio      := (v_item->>'precio_unitario')::DECIMAL;
+        v_cantidad := (v_item->>'cantidad')::INT;
+        v_precio := (v_item->>'precio_unitario')::DECIMAL;
 
         INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario)
-        VALUES (v_id_venta, v_id_producto, v_cantidad, v_precio);
+        VALUES (id_venta, v_id_producto, v_cantidad, v_precio);
 
         UPDATE stock_sucursal
         SET cantidad = cantidad - v_cantidad
         WHERE id_producto = v_id_producto AND id_sucursal = v_id_sucursal;
     END LOOP;
 
-    RETURN v_id_venta;
-
 EXCEPTION
     WHEN OTHERS THEN
-        RAISE; -- rollback automatico + propaga el error al backend
+        ROLLBACK;
+        RAISE;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
--- ==========================================
--- SP 2: reabastecer_stock (para bodeguero)
--- ==========================================
-
-CREATE OR REPLACE FUNCTION reabastecer_stock(
-    p_id_producto  INT,
-    p_id_sucursal  INT,
-    p_cantidad     INT
+CREATE OR REPLACE PROCEDURE reabastecer_stock(
+    IN p_id_producto INT,
+    IN p_id_sucursal INT,
+    IN p_cantidad INT
 )
-RETURNS VOID AS $$
+LANGUAGE plpgsql
+AS $$
 BEGIN
-    -- validar que el producto existe
     IF NOT EXISTS (SELECT 1 FROM producto WHERE id_producto = p_id_producto) THEN
         RAISE EXCEPTION 'Producto no encontrado';
     END IF;
 
-    -- validar que la sucursal existe
     IF NOT EXISTS (SELECT 1 FROM sucursal WHERE id_sucursal = p_id_sucursal) THEN
         RAISE EXCEPTION 'Sucursal no encontrada';
     END IF;
 
-    -- validar cantidad positiva
     IF p_cantidad <= 0 THEN
         RAISE EXCEPTION 'La cantidad debe ser mayor a 0';
     END IF;
 
-    -- si ya existe el registro, sumar; si no, insertar
     INSERT INTO stock_sucursal (id_producto, id_sucursal, cantidad)
     VALUES (p_id_producto, p_id_sucursal, p_cantidad)
     ON CONFLICT (id_producto, id_sucursal)
@@ -326,23 +343,21 @@ BEGIN
 
 EXCEPTION
     WHEN OTHERS THEN
+        ROLLBACK;
         RAISE;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
--- ==========================================
--- SP 3: generar_factura (con OUT params)
--- ==========================================
-
-CREATE OR REPLACE FUNCTION generar_factura(
-    p_id_venta        INT,
+CREATE OR REPLACE PROCEDURE generar_factura(
+    IN p_id_venta INT,
     OUT numero_factura VARCHAR(20),
     OUT cliente_nombre VARCHAR(100),
     OUT empleado_nombre VARCHAR(200),
     OUT sucursal_nombre VARCHAR(100),
-    OUT fecha_venta    DATE,
-    OUT total          DECIMAL(10,2)
+    OUT fecha_venta DATE,
+    OUT total DECIMAL(10,2)
 )
+LANGUAGE plpgsql
 AS $$
 BEGIN
     SELECT
@@ -360,7 +375,7 @@ BEGIN
         fecha_venta,
         total
     FROM venta v
-    JOIN cliente c  ON v.id_cliente  = c.id_cliente
+    JOIN cliente c ON v.id_cliente = c.id_cliente
     JOIN empleado e ON v.id_empleado = e.id_empleado
     JOIN sucursal s ON v.id_sucursal = s.id_sucursal
     WHERE v.id_venta = p_id_venta;
@@ -369,24 +384,19 @@ BEGIN
         RAISE EXCEPTION 'Venta % no encontrada', p_id_venta;
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
--- ==========================================
--- SP 4: actualizar_precio_producto
--- ==========================================
-
-CREATE OR REPLACE FUNCTION actualizar_precio_producto(
-    p_id_producto  INT,
-    p_precio_nuevo DECIMAL(10,2)
+CREATE OR REPLACE PROCEDURE actualizar_precio_producto(
+    IN p_id_producto INT,
+    IN p_precio_nuevo DECIMAL(10,2)
 )
-RETURNS VOID AS $$
+LANGUAGE plpgsql
+AS $$
 BEGIN
-    -- validar que el producto existe
     IF NOT EXISTS (SELECT 1 FROM producto WHERE id_producto = p_id_producto) THEN
         RAISE EXCEPTION 'Producto no encontrado';
     END IF;
 
-    -- validar precio positivo
     IF p_precio_nuevo <= 0 THEN
         RAISE EXCEPTION 'El precio debe ser mayor a 0';
     END IF;
@@ -397,47 +407,54 @@ BEGIN
 
 EXCEPTION
     WHEN OTHERS THEN
+        ROLLBACK;
         RAISE;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
--- ==========================================
--- SP 5: reporte_ventas (por sucursal y fechas)
--- ==========================================
-
-CREATE OR REPLACE FUNCTION reporte_ventas(
-    p_id_sucursal  INT DEFAULT NULL,
-    p_fecha_inicio DATE DEFAULT NULL,
-    p_fecha_fin    DATE DEFAULT NULL
+CREATE OR REPLACE PROCEDURE reporte_ventas(
+    IN p_id_sucursal INT DEFAULT NULL,
+    IN p_fecha_inicio DATE DEFAULT NULL,
+    IN p_fecha_fin DATE DEFAULT NULL,
+    OUT reporte JSONB
 )
-RETURNS TABLE (
-    sucursal       VARCHAR,
-    empleado       TEXT,
-    total_ventas   BIGINT,
-    ingresos       DECIMAL,
-    ticket_promedio DECIMAL,
-    fecha          DATE
-) AS $$
+LANGUAGE plpgsql
+AS $$
 BEGIN
-    RETURN QUERY
-    SELECT
-        s.nombre::VARCHAR         AS sucursal,
-        (e.nombre || ' ' || e.apellido)::TEXT AS empleado,
-        COUNT(v.id_venta)         AS total_ventas,
-        SUM(v.total)              AS ingresos,
-        AVG(v.total)              AS ticket_promedio,
-        v.fecha                   AS fecha
-    FROM venta v
-    JOIN empleado e ON v.id_empleado = e.id_empleado
-    JOIN sucursal s ON v.id_sucursal = s.id_sucursal
-    WHERE
-        (p_id_sucursal IS NULL OR v.id_sucursal = p_id_sucursal)
-        AND (p_fecha_inicio IS NULL OR v.fecha >= p_fecha_inicio)
-        AND (p_fecha_fin    IS NULL OR v.fecha <= p_fecha_fin)
-    GROUP BY s.nombre, e.nombre, e.apellido, v.fecha
-    ORDER BY v.fecha DESC, ingresos DESC;
+    SELECT COALESCE(
+        jsonb_agg(
+            jsonb_build_object(
+                'sucursal', sucursal,
+                'empleado', empleado,
+                'total_ventas', total_ventas,
+                'ingresos', ingresos,
+                'ticket_promedio', ticket_promedio,
+                'fecha', fecha
+            )
+            ORDER BY fecha DESC, ingresos DESC
+        ),
+        '[]'::jsonb
+    )
+    INTO reporte
+    FROM (
+        SELECT
+            s.nombre::VARCHAR AS sucursal,
+            (e.nombre || ' ' || e.apellido)::TEXT AS empleado,
+            COUNT(v.id_venta) AS total_ventas,
+            SUM(v.total) AS ingresos,
+            AVG(v.total) AS ticket_promedio,
+            v.fecha AS fecha
+        FROM venta v
+        JOIN empleado e ON v.id_empleado = e.id_empleado
+        JOIN sucursal s ON v.id_sucursal = s.id_sucursal
+        WHERE
+            (p_id_sucursal IS NULL OR v.id_sucursal = p_id_sucursal)
+            AND (p_fecha_inicio IS NULL OR v.fecha >= p_fecha_inicio)
+            AND (p_fecha_fin IS NULL OR v.fecha <= p_fecha_fin)
+        GROUP BY s.nombre, e.nombre, e.apellido, v.fecha
+    ) AS reporte_base;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 -- INSERTAR DATOS
 
@@ -487,32 +504,32 @@ INSERT INTO sucursal (nombre, telefono, direccion, hora_abre, hora_cierra) VALUE
 ('Sucursal Xela',    '55555555', 'Quetzaltenango',     '08:00', '19:00');
 
 
-INSERT INTO empleado (nombre, apellido, es_gerente, salario, id_sucursal) VALUES
-('Juan',     'Pérez',     true,  5000.00, 1),
-('María',    'López',     false, 3000.00, 1),
-('Carlos',   'Ramírez',   false, 3000.00, 1),
-('Ana',      'García',    false, 2800.00, 1),
-('Luis',     'Mendoza',   false, 2800.00, 1),
-('Sofia',    'Ajú',       true,  5500.00, 2),
-('Pedro',    'Coc',       false, 3000.00, 2),
-('Diana',    'Toj',       false, 2800.00, 2),
-('Roberto',  'Ixcoy',     false, 2800.00, 2),
-('Elena',    'Pac',       false, 3000.00, 2),
-('Mario',    'Chávez',    true,  5200.00, 3),
-('Laura',    'Simón',     false, 2800.00, 3),
-('Jorge',    'Batz',      false, 3000.00, 3),
-('Claudia',  'Xol',       false, 2800.00, 3),
-('Andrés',   'Caal',      false, 2800.00, 3),
-('Patricia', 'Noj',       true,  5300.00, 4),
-('Ricardo',  'Tzoc',      false, 3000.00, 4),
-('Verónica', 'Chun',      false, 2800.00, 4),
-('Miguel',   'Pú',        false, 2800.00, 4),
-('Sandra',   'Yat',       false, 3000.00, 4),
-('Fernando', 'Sacul',     true,  5100.00, 5),
-('Gabriela', 'Pop',       false, 2800.00, 5),
-('Héctor',   'Choc',      false, 3000.00, 5),
-('Ingrid',   'Xiquin',    false, 2800.00, 5),
-('Oscar',    'Maquin',    false, 2800.00, 5);
+INSERT INTO empleado (nombre, apellido, es_gerente, rol, salario, id_sucursal) VALUES
+('Juan',     'Pérez',     true,  'gerente_sucursal', 5000.00, 1),
+('María',    'López',     false, 'vendedor',         3000.00, 1),
+('Carlos',   'Ramírez',   false, 'vendedor',         3000.00, 1),
+('Ana',      'García',    false, 'vendedor',         2800.00, 1),
+('Luis',     'Mendoza',   false, 'vendedor',         2800.00, 1),
+('Sofia',    'Ajú',       true,  'gerente_sucursal', 5500.00, 2),
+('Pedro',    'Coc',       false, 'vendedor',         3000.00, 2),
+('Diana',    'Toj',       false, 'vendedor',         2800.00, 2),
+('Roberto',  'Ixcoy',     false, 'vendedor',         2800.00, 2),
+('Elena',    'Pac',       false, 'vendedor',         3000.00, 2),
+('Mario',    'Chávez',    true,  'gerente_sucursal', 5200.00, 3),
+('Laura',    'Simón',     false, 'vendedor',         2800.00, 3),
+('Jorge',    'Batz',      false, 'vendedor',         3000.00, 3),
+('Claudia',  'Xol',       false, 'vendedor',         2800.00, 3),
+('Andrés',   'Caal',      false, 'vendedor',         2800.00, 3),
+('Patricia', 'Noj',       true,  'gerente_sucursal', 5300.00, 4),
+('Ricardo',  'Tzoc',      false, 'vendedor',         3000.00, 4),
+('Verónica', 'Chun',      false, 'vendedor',         2800.00, 4),
+('Miguel',   'Pú',        false, 'vendedor',         2800.00, 4),
+('Sandra',   'Yat',       false, 'vendedor',         3000.00, 4),
+('Fernando', 'Sacul',     true,  'gerente_sucursal', 5100.00, 5),
+('Gabriela', 'Pop',       false, 'vendedor',         2800.00, 5),
+('Héctor',   'Choc',      false, 'vendedor',         3000.00, 5),
+('Ingrid',   'Xiquin',    false, 'vendedor',         2800.00, 5),
+('Oscar',    'Maquin',    false, 'vendedor',         2800.00, 5);
 
 
 INSERT INTO cliente (nombre, telefono, correo, nit) VALUES

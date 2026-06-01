@@ -5,8 +5,14 @@ export async function apiFetch<T>(
     endpoint: string,
     options?: RequestInit
 ): Promise<T> {
+    const headers = new Headers({ 'Content-Type': 'application/json' })
+    if (options?.headers) {
+        new Headers(options.headers).forEach((value, key) => headers.set(key, value))
+    }
+
     const res = await fetch(`${BASE_URL}${endpoint}`, {
-        headers: { 'Content-Type': 'application/json' },
+        headers,
+        credentials: 'include',
         ...options,
     });
 
