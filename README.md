@@ -142,11 +142,13 @@ La creación de venta implementa una transacción:
 
 ## ⚙️ Stored Procedures y ORM
 
-* 5 rutinas del módulo de ventas se invocan desde el backend.
-* `registrar_venta` maneja validaciones, transacción lógica y errores.
-* `generar_factura` usa parámetros de salida.
-* `reporte_ventas` devuelve un resumen estructurado para la UI.
-* TypeORM se usa en CRUD reales de categorías, clientes, sucursales, empleados y ventas.
+* Se movió la lógica principal de ventas a stored procedures para centralizar validaciones y reglas dentro de PostgreSQL.
+* `registrar_venta` controla la creación de la venta, el detalle, el descuento de stock y la validación de errores.
+* `generar_factura` devuelve la información necesaria para mostrar o imprimir la factura.
+* `actualizar_precio` y `reabastecer_stock` automatizan operaciones repetitivas del inventario.
+* `reporte_ventas` entrega un resumen estructurado para la vista de reportes.
+* El backend detecta si la base expone procedures o funciones heredadas y llama la variante compatible para no romper instalaciones viejas.
+* TypeORM quedó para los CRUD de categorías, clientes, sucursales, empleados y parte de ventas, mientras que las operaciones críticas del flujo de negocio pasan por SQL nativo.
 
 ## 📈 Reportes en UI
 
